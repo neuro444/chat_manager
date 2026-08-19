@@ -11,3 +11,4 @@ test_results/*.log
 *.md
 !README.md
 !integration.md
+!security_plan.md
