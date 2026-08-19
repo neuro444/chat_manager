@@ -10,6 +10,7 @@ Assistants API sunsets in H1 2026). Differences that matter here:
 
 Key is read from OPENAI_API_KEY in the environment only.
 """
+import json
 import time
 from typing import Iterator
 
@@ -38,6 +39,7 @@ class OpenAIProvider:
         self.client = OpenAI()
         self.model = model or config.LLM_MODEL
         self.last_tools_called = False
+        self.last_tool_results: list[dict] = []
 
     def _create(self, messages: list[dict], stream: bool = False, tools=None):
         instructions, turns = split_instructions(messages)
@@ -54,6 +56,7 @@ class OpenAIProvider:
 
     def complete(self, messages: list[dict], tools=None, **kw) -> str:
         self.last_tools_called = False
+        self.last_tool_results = []
         last_err = None
         for attempt in range(config.MAX_RETRIES):
             try:
@@ -81,6 +84,14 @@ class OpenAIProvider:
 
         for call in calls:
             result = run_tool(call.name, call.arguments)
+            try:
+                parsed_result = json.loads(result)
+            except (json.JSONDecodeError, TypeError):
+                parsed_result = result
+            self.last_tool_results.append({
+                "name": call.name,
+                "result": parsed_result,
+            })
             convo.append({"type": "function_call", "call_id": call.call_id,
                           "name": call.name, "arguments": call.arguments})
             convo.append({"type": "function_call_output",
@@ -88,6 +99,10 @@ class OpenAIProvider:
         return self._create(convo, tools=TOOL_SCHEMAS).output_text or ""
 
     def stream(self, messages: list[dict], **kw) -> Iterator[str]:
+        # Streaming currently exposes no ordering tools, so it can never carry
+        # a ready order from a previous non-streaming turn.
+        self.last_tools_called = False
+        self.last_tool_results = []
         for event in self._create(messages, stream=True):
             if getattr(event, "type", None) == "response.output_text.delta":
                 delta = getattr(event, "delta", None)

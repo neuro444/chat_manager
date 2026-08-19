@@ -6,6 +6,7 @@ boundary has leaked.
 """
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
+import json
 
 import config
 from context.assembler import assemble
@@ -118,8 +119,8 @@ def _complete(provider, messages):
 
 def _finish_turn(
     repo, provider, session_id, user_message, answer, is_first_turn,
-    llm_latency_ms, order_placed=False, to_manager=False, tools_called=False,
-    summary="", verbatim_user_chat=None,
+    llm_latency_ms, order_ready=False, order=None, to_manager=False,
+    tools_called=False, summary="", verbatim_user_chat=None,
 ):
     """Shared epilogue: persist the reply, then post-turn work."""
     repo.append_message(
@@ -129,7 +130,8 @@ def _finish_turn(
         metadata={
             "model": config.LLM_MODEL,
             "llm_latency_ms": llm_latency_ms,
-            "order_placed": order_placed,
+            "order_ready": order_ready,
+            "order": order,
             "To_manager": to_manager,
             "tools_called": tools_called,
             "summary": summary,
@@ -139,6 +141,66 @@ def _finish_turn(
     if is_first_turn:
         repo.rename_session(session_id, user_message[:50])
     maybe_roll_summary(repo, provider, session_id)
+
+
+def _money(value) -> str:
+    """Serialize money consistently for downstream order systems."""
+    return f"{float(value):.2f}"
+
+
+def _build_ready_order(repo, provider, user_id: str, requested: bool):
+    """Build an order only from an actual successful price_order tool result.
+
+    The LLM controls conversation wording, but it is not the source of truth for
+    item names or money. The external integration may submit this object later.
+    """
+    if not requested:
+        return False, None
+
+    priced = None
+    for invocation in reversed(getattr(provider, "last_tool_results", [])):
+        if invocation.get("name") == "price_order":
+            priced = invocation.get("result")
+            break
+    if isinstance(priced, str):
+        try:
+            priced = json.loads(priced)
+        except json.JSONDecodeError:
+            priced = None
+    if not isinstance(priced, dict) or priced.get("unknown"):
+        return False, None
+    lines = priced.get("items")
+    if not isinstance(lines, list) or not lines:
+        return False, None
+
+    items = []
+    try:
+        for line in lines:
+            quantity = int(line["quantity"])
+            if quantity <= 0:
+                return False, None
+            items.append({
+                "name": str(line["name"]),
+                "quantity": quantity,
+                "unit_price": _money(line["price"]),
+                "line_total": _money(line["line_total"]),
+            })
+        subtotal = _money(priced["subtotal"])
+        tax = _money(priced["tax"])
+        total = _money(priced["total"])
+    except (KeyError, TypeError, ValueError):
+        return False, None
+
+    user = repo.get_user(user_id)
+    return True, {
+        "customer_name": user.name if user else "",
+        "fulfillment": "pickup",
+        "items": items,
+        "subtotal": subtotal,
+        "tax": tax,
+        "total": total,
+        "preparation_minutes": config.PICKUP_PREPARATION_MINUTES,
+    }
 
 
 def handle_message(repo, provider, user_id, session_id, user_message):
@@ -162,12 +224,14 @@ def handle_message(repo, provider, user_id, session_id, user_message):
         getattr(provider, "last_tools_called", parsed["tools_called"])
     )
     ended = parsed["call_ended"]
-    order_placed = parsed["order_placed"]
+    order_ready, order = _build_ready_order(
+        repo, provider, user_id, parsed["order_ready"]
+    )
     to_manager = parsed["To_manager"]
     answer = parsed["answer"]
     _finish_turn(
         repo, provider, session_id, user_message, answer, is_first,
-        llm_latency_ms, order_placed, to_manager, parsed["tools_called"],
+        llm_latency_ms, order_ready, order, to_manager, parsed["tools_called"],
         parsed["summary"], parsed["verbatim_user_chat"],
     )
     if ended:
@@ -176,14 +240,14 @@ def handle_message(repo, provider, user_id, session_id, user_message):
         "answer": answer,
         "session_id": session_id,
         "call_ended": ended,
-        "order_placed": order_placed,
+        "order_ready": order_ready,
+        "order": order,
         "To_manager": to_manager,
         "tools_called": parsed["tools_called"],
         "summary": parsed["summary"],
         "verbatim_user_chat": parsed["verbatim_user_chat"],
         "end_delay_seconds": config.CALL_END_DELAY_SECONDS if ended else 0,
     }
-    import json
     _debug(f"[chat_result] {json.dumps(result, ensure_ascii=False)}")
     return result
 
@@ -217,12 +281,14 @@ def stream_message(repo, provider, user_id, session_id, user_message):
         getattr(provider, "last_tools_called", parsed["tools_called"])
     )
     ended = parsed["call_ended"]
-    order_placed = parsed["order_placed"]
+    order_ready, order = _build_ready_order(
+        repo, provider, user_id, parsed["order_ready"]
+    )
     to_manager = parsed["To_manager"]
     answer = parsed["answer"]
     _finish_turn(
         repo, provider, session_id, user_message, answer, is_first,
-        llm_latency_ms, order_placed, to_manager, parsed["tools_called"],
+        llm_latency_ms, order_ready, order, to_manager, parsed["tools_called"],
         parsed["summary"], parsed["verbatim_user_chat"],
     )
     if ended:
@@ -231,7 +297,8 @@ def stream_message(repo, provider, user_id, session_id, user_message):
         "answer": answer,
         "session_id": session_id,
         "call_ended": ended,
-        "order_placed": order_placed,
+        "order_ready": order_ready,
+        "order": order,
         "To_manager": to_manager,
         "tools_called": parsed["tools_called"],
         "summary": parsed["summary"],

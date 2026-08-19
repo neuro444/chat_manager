@@ -63,6 +63,7 @@ SESSION_TIMEOUT_MINUTES = _int("SESSION_TIMEOUT_MINUTES", 5)
 # finish speaking the sign-off before the line drops. We only report it.
 CALL_END_DELAY_SECONDS = _int("CALL_END_DELAY_SECONDS", 20)
 TAX_RATE = _float("TAX_RATE", 0.0775)
+PICKUP_PREPARATION_MINUTES = os.getenv("PICKUP_PREPARATION_MINUTES", "20-30")
 
 # ── Voice ─────────────────────────────
 STT_MODEL = os.getenv("STT_MODEL", "gpt-transcribe")

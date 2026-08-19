@@ -91,9 +91,10 @@ Blank messages return HTTP `400`.
   "answer": "Certainly, two samosas. Is that everything for your order?",
   "session_id": "81068fc8-5d86-4f67-87fe-a75034a2f42d",
   "call_ended": false,
-  "order_placed": false,
+  "order_ready": false,
   "To_manager": false,
   "tools_called": false,
+  "order": null,
   "summary": "",
   "verbatim_user_chat": [],
   "end_delay_seconds": 0
@@ -107,7 +108,8 @@ Blank messages return HTTP `400`.
 | `answer` | string | The only value intended for the customer |
 | `session_id` | string | Send with the next turn |
 | `call_ended` | boolean | Conversation is complete |
-| `order_placed` | boolean | A regular pickup order was reviewed and accepted |
+| `order_ready` | boolean | A verified pickup order is ready for external submission |
+| `order` | object or null | Structured order from the actual pricing-tool result |
 | `To_manager` | boolean | Cake or catering request requires manager follow-up |
 | `tools_called` | boolean | A server-side LLM tool actually ran for this response |
 | `summary` | string | Manager-handoff summary; otherwise empty |
@@ -117,6 +119,12 @@ Blank messages return HTTP `400`.
 `tools_called` is verified against actual provider tool execution. It is not
 accepted solely because the model wrote `true`.
 
+`order_ready` does not mean that an order was placed. Chat Manager constructs
+`order` from the successful `price_order` tool result and returns it to the
+caller. The integrating service should submit that object to its order system
+and separately record the order system's acceptance or rejection. Never parse
+items, quantities, or totals from `answer`.
+
 ### Completed pickup order
 
 ```json
@@ -124,9 +132,18 @@ accepted solely because the model wrote `true`.
   "answer": "Your order is confirmed and will be ready in approximately twenty to thirty minutes. Thanks for calling CakeWorld Alpharetta.",
   "session_id": "81068fc8-5d86-4f67-87fe-a75034a2f42d",
   "call_ended": true,
-  "order_placed": true,
+  "order_ready": true,
   "To_manager": false,
   "tools_called": true,
+  "order": {
+    "customer_name": "Priya",
+    "fulfillment": "pickup",
+    "items": [{"name":"Veg Biriyani","quantity":3,"unit_price":"13.99","line_total":"41.97"}],
+    "subtotal": "41.97",
+    "tax": "3.25",
+    "total": "45.22",
+    "preparation_minutes": "20-30"
+  },
   "summary": "",
   "verbatim_user_chat": [],
   "end_delay_seconds": 20
@@ -140,9 +157,10 @@ accepted solely because the model wrote `true`.
   "answer": "I’ll send your catering requirements to our manager, who will contact you.",
   "session_id": "81068fc8-5d86-4f67-87fe-a75034a2f42d",
   "call_ended": true,
-  "order_placed": false,
+  "order_ready": false,
   "To_manager": true,
   "tools_called": false,
+  "order": null,
   "summary": "Customer requests office catering for approximately sixty people next Friday.",
   "verbatim_user_chat": [
     "I need catering for an office event.",
@@ -302,7 +320,7 @@ async function sendTurn(userId, message) {
   displayOrSpeak(result.answer);
 
   if (result.To_manager) createManagerHandoff(result);
-  if (result.order_placed) recordCompletedOrder(result);
+  if (result.order_ready) submitOrder(result.order);
   if (result.call_ended) finishConversation(result.end_delay_seconds);
 
   return result;

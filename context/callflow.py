@@ -23,7 +23,8 @@ def parse_model_response(raw: str | dict) -> dict:
     return {
         "answer": str(data.get("answer") or "").strip(),
         "call_ended": data.get("call_ended") is True,
-        "order_placed": data.get("order_placed") is True,
+        "order_ready": data.get("order_ready") is True,
+        "order": data.get("order") if isinstance(data.get("order"), dict) else None,
         "To_manager": data.get("To_manager") is True,
         "tools_called": data.get("tools_called") is True,
         "summary": str(data.get("summary") or "").strip(),
