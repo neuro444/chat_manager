@@ -121,6 +121,7 @@ def _finish_turn(
     repo, provider, session_id, user_message, answer, is_first_turn,
     llm_latency_ms, order_ready=False, order=None, to_manager=False,
     tools_called=False, summary="", verbatim_user_chat=None,
+    response_fields=None,
 ):
     """Shared epilogue: persist the reply, then post-turn work."""
     repo.append_message(
@@ -136,11 +137,25 @@ def _finish_turn(
             "tools_called": tools_called,
             "summary": summary,
             "verbatim_user_chat": verbatim_user_chat or [],
+            "response_fields": response_fields or {},
         },
     )
     if is_first_turn:
         repo.rename_session(session_id, user_message[:50])
     maybe_roll_summary(repo, provider, session_id)
+
+
+_PUBLIC_CORE_FIELDS = {
+    "answer", "session_id", "call_ended", "order_ready", "order",
+    "To_manager", "tools_called", "summary", "verbatim_user_chat",
+    "end_delay_seconds",
+}
+
+
+def _response_extensions(parsed: dict) -> dict:
+    """Pass prompt-defined integration fields through without bespoke wiring."""
+    return {key: value for key, value in parsed.items()
+            if key not in _PUBLIC_CORE_FIELDS}
 
 
 def _money(value) -> str:
@@ -228,15 +243,18 @@ def handle_message(repo, provider, user_id, session_id, user_message):
         repo, provider, user_id, parsed["order_ready"]
     )
     to_manager = parsed["To_manager"]
+    extensions = _response_extensions(parsed)
     answer = parsed["answer"]
     _finish_turn(
         repo, provider, session_id, user_message, answer, is_first,
         llm_latency_ms, order_ready, order, to_manager, parsed["tools_called"],
         parsed["summary"], parsed["verbatim_user_chat"],
+        extensions,
     )
     if ended:
         repo.mark_session_ended(session_id)
     result = {
+        **extensions,
         "answer": answer,
         "session_id": session_id,
         "call_ended": ended,
@@ -285,15 +303,18 @@ def stream_message(repo, provider, user_id, session_id, user_message):
         repo, provider, user_id, parsed["order_ready"]
     )
     to_manager = parsed["To_manager"]
+    extensions = _response_extensions(parsed)
     answer = parsed["answer"]
     _finish_turn(
         repo, provider, session_id, user_message, answer, is_first,
         llm_latency_ms, order_ready, order, to_manager, parsed["tools_called"],
         parsed["summary"], parsed["verbatim_user_chat"],
+        extensions,
     )
     if ended:
         repo.mark_session_ended(session_id)
     return {
+        **extensions,
         "answer": answer,
         "session_id": session_id,
         "call_ended": ended,

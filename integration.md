@@ -93,6 +93,7 @@ Blank messages return HTTP `400`.
   "call_ended": false,
   "order_ready": false,
   "To_manager": false,
+  "Transfer_to_Manager": false,
   "tools_called": false,
   "order": null,
   "summary": "",
@@ -111,6 +112,7 @@ Blank messages return HTTP `400`.
 | `order_ready` | boolean | A verified pickup order is ready for external submission |
 | `order` | object or null | Structured order from the actual pricing-tool result |
 | `To_manager` | boolean | Cake or catering request requires manager follow-up |
+| `Transfer_to_Manager` | boolean | Current interaction requires direct restaurant-staff transfer |
 | `tools_called` | boolean | A server-side LLM tool actually ran for this response |
 | `summary` | string | Manager-handoff summary; otherwise empty |
 | `verbatim_user_chat` | string array | Original user messages for manager handoff |
@@ -125,6 +127,12 @@ caller. The integrating service should submit that object to its order system
 and separately record the order system's acceptance or rejection. Never parse
 items, quantities, or totals from `answer`.
 
+When `Transfer_to_Manager` is true, the external communication provider should
+transfer or escalate the current interaction to restaurant staff. It is separate
+from `To_manager`, which is the asynchronous cake/catering follow-up workflow.
+Additional JSON fields defined by the prompt pass through `/chat` and are stored
+under the assistant message's `response_fields` metadata.
+
 ### Completed pickup order
 
 ```json
@@ -134,6 +142,7 @@ items, quantities, or totals from `answer`.
   "call_ended": true,
   "order_ready": true,
   "To_manager": false,
+  "Transfer_to_Manager": false,
   "tools_called": true,
   "order": {
     "customer_name": "Priya",
@@ -159,6 +168,7 @@ items, quantities, or totals from `answer`.
   "call_ended": true,
   "order_ready": false,
   "To_manager": true,
+  "Transfer_to_Manager": false,
   "tools_called": false,
   "order": null,
   "summary": "Customer requests office catering for approximately sixty people next Friday.",
