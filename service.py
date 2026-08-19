@@ -18,6 +18,17 @@ from context.summary import maybe_roll_summary
 from menu.loader import format_menu_for_prompt
 
 
+def _debug(msg: str) -> None:
+    """Print transcript-bearing debug output only when DEBUG_CONTEXT is on.
+
+    Call content is PII (user_id is the caller's phone number), so these lines
+    must stay out of container logs on the server. Timing lines are not gated —
+    they carry no message content and are useful in production.
+    """
+    if config.DEBUG_CONTEXT:
+        print(msg, flush=True)
+
+
 def build_context(repo, user_id: str, session_id: str, user_message: str) -> list[dict]:
     """Assemble the full prompt for a turn. Exposed so /context can inspect it."""
     session = repo.get_session(session_id)
@@ -139,7 +150,7 @@ def handle_message(repo, provider, user_id, session_id, user_message):
     llm_started = perf_counter()
     raw = _complete(provider, messages)
     llm_latency_ms = round((perf_counter() - llm_started) * 1000, 2)
-    print(f"[llm_raw_response] session_id={session_id} response={raw!r}", flush=True)
+    _debug(f"[llm_raw_response] session_id={session_id} response={raw!r}")
     print(
         f"[llm_call_complete] session_id={session_id} "
         f"response_time_ms={llm_latency_ms} "
@@ -173,7 +184,7 @@ def handle_message(repo, provider, user_id, session_id, user_message):
         "end_delay_seconds": config.CALL_END_DELAY_SECONDS if ended else 0,
     }
     import json
-    print(f"[chat_result] {json.dumps(result, ensure_ascii=False)}", flush=True)
+    _debug(f"[chat_result] {json.dumps(result, ensure_ascii=False)}")
     return result
 
 
@@ -200,7 +211,7 @@ def stream_message(repo, provider, user_id, session_id, user_message):
         flush=True,
     )
     raw = "".join(chunks)
-    print(f"[llm_raw_response] session_id={session_id} response={raw!r}", flush=True)
+    _debug(f"[llm_raw_response] session_id={session_id} response={raw!r}")
     parsed = parse_model_response(raw)
     parsed["tools_called"] = bool(
         getattr(provider, "last_tools_called", parsed["tools_called"])
