@@ -1,0 +1,12 @@
+LAYER 11 — MONGODB ADAPTER
+Timestamp: 2026-08-19 08:17:36
+============================================================
+--- LIVE: real MongoDB on localhost:27017, own database ---
+connected; using database 'chat_manager_livetest'
+messages persisted : 4
+seq order          : [1, 2, 3, 4]
+after reconnect    : 4 messages
+cross-session recall: True
+leaked to bob       : False
+collections         : {'users': 1, 'sessions': 3, 'messages': 4}
+PASS

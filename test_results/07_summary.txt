@@ -1,0 +1,18 @@
+LAYER 7 — SUMMARY
+Timestamp: 2026-08-19 08:17:17
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.11.11, pytest-9.1.1, pluggy-1.6.0 -- /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collecting ... collected 5 items
+
+tests/test_07_summary.py::test_no_summary_for_short_conversation PASSED  [ 20%]
+tests/test_07_summary.py::test_summary_rolls_after_threshold PASSED      [ 40%]
+tests/test_07_summary.py::test_summarized_upto_advances PASSED           [ 60%]
+tests/test_07_summary.py::test_summary_reaches_the_prompt PASSED         [ 80%]
+tests/test_07_summary.py::test_summary_survives_clear PASSED             [100%]
+
+============================== 5 passed in 0.01s ===============================

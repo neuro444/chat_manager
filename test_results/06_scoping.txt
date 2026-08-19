@@ -1,0 +1,21 @@
+LAYER 6 — SCOPING
+Timestamp: 2026-08-19 08:17:16
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.11.11, pytest-9.1.1, pluggy-1.6.0 -- /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collecting ... collected 8 items
+
+tests/test_06_scoping.py::test_search_never_returns_another_users_messages[memory] PASSED [ 12%]
+tests/test_06_scoping.py::test_search_never_returns_another_users_messages[sqlite] PASSED [ 25%]
+tests/test_06_scoping.py::test_assembled_context_never_leaks_across_users[memory] PASSED [ 37%]
+tests/test_06_scoping.py::test_assembled_context_never_leaks_across_users[sqlite] PASSED [ 50%]
+tests/test_06_scoping.py::test_same_user_does_see_own_history[memory] PASSED [ 62%]
+tests/test_06_scoping.py::test_same_user_does_see_own_history[sqlite] PASSED [ 75%]
+tests/test_06_scoping.py::test_sessions_list_never_shows_other_users[memory] PASSED [ 87%]
+tests/test_06_scoping.py::test_sessions_list_never_shows_other_users[sqlite] PASSED [100%]
+
+============================== 8 passed in 0.04s ===============================

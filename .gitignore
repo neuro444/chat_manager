@@ -1,0 +1,13 @@
+.venv/
+.env
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+*.pyc
+.pytest_cache/
+test_results/*.log
+.DS_Store
+*.md
+!README.md
+!integration.md

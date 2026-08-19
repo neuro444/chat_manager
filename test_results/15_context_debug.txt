@@ -1,0 +1,76 @@
+LAYER 15 — CONTEXT CONSOLE REPORT + NAME DISCIPLINE
+Timestamp: 2026-08-19 09:56:56
+============================================================
+Five contexts printed per turn when DEBUG_CONTEXT=true:
+  1. USER QUERY              (+ resolved entities)
+  2. CHAT SESSION HISTORY    (last HISTORY_WINDOW turns, this call)
+  3. RECENT SESSIONS         (retrieval hits, same caller)
+  4. ALL PAST CHATS SUMMARY  (capped at 20 sessions)
+  5. MENU                    (abbreviated ~100 words for the console;
+                              the model still receives all 153 items)
+
+NAME DISCIPLINE: previously the agent opened every reply with the
+caller's name. Now limited to the greeting and the final confirmation.
+The profile block is turn-aware, so the instruction changes after turn 1.
+
+--- GREEN: automated ---
+plugins: anyio-4.14.2
+collecting ... collected 7 items
+
+tests/test_15_context_debug.py::test_report_has_five_labelled_contexts PASSED [ 14%]
+tests/test_15_context_debug.py::test_current_query_is_shown PASSED       [ 28%]
+tests/test_15_context_debug.py::test_menu_is_abbreviated_in_report PASSED [ 42%]
+tests/test_15_context_debug.py::test_model_still_receives_full_menu PASSED [ 57%]
+tests/test_15_context_debug.py::test_abbreviate_keeps_head_and_tail_verbatim PASSED [ 71%]
+tests/test_15_context_debug.py::test_past_sessions_capped_at_twenty PASSED [ 85%]
+tests/test_15_context_debug.py::test_report_survives_empty_session PASSED [100%]
+
+============================== 7 passed in 0.02s ===============================
+
+--- LIVE: sample console output (first turn) ---
+
+════════════════════════════════════════════════════════════════════════
+CONTEXT FOR TURN — caller +919876543210 (Priya) · session 72825c2d
+════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────────────────────────
+1. USER QUERY  [entities: Priya, Two]
+────────────────────────────────────────────────────────────────────────
+Hi, it's Priya again. Two samosas please.
+
+────────────────────────────────────────────────────────────────────────
+2. CHAT SESSION HISTORY  [last 10 turns of this call]
+────────────────────────────────────────────────────────────────────────
+[1] user: Hi, it's Priya again. Two samosas please.
+
+────────────────────────────────────────────────────────────────────────
+3. RECENT SESSIONS (same caller)  [top 5 matches]
+────────────────────────────────────────────────────────────────────────
+- This is Priya, one chicken biryani
+
+────────────────────────────────────────────────────────────────────────
+4. ALL PAST CHATS SUMMARY  [max 20 sessions]
+────────────────────────────────────────────────────────────────────────
+• Previous call (2 msgs)
+
+────────────────────────────────────────────────────────────────────────
+5. MENU  [abbreviated · model receives full ~1435 tokens]
+────────────────────────────────────────────────────────────────────────
+Cake World, Alpharetta — Kerala / South Indian / Indo-Chinese MENU (CSV, prices in dollars): name,price,category,veg Samosa,5.99,veg_appetizer,yes Gobi Kondattam,11.99,veg_appetizer,yes Gobi Manchurian,11.99,veg_appetizer,yes Chilli Paneer,11.99,veg_appetizer,yes Chilli Idly,10.99,veg_appetizer,yes Grilled Paneer with Vegetables,11.99,veg_appetizer,yes Kandari Paneer,11.99,veg_appetizer,yes Cut Mirchi,9.99,veg_appetizer,yes Onion Beetroot Pakoda,9.99,veg_appetizer,yes Kandari Tawa Fish,12.99,non_veg_appetizer,no Bang Bang Fish,12.99,non_veg_appetizer,no Ginger Shrimp,14.99,non_veg_appetizer,no Shrimp Pepper Fry,14.99,non_veg_appetizer,no Chicken Kondattam,12.99,non_veg_appetizer,no Kandari
+   ...[318 words hidden — model receives all of it]...
+Chicken Puff,3.49,puffs,no Chilli Chicken Roll,3.49,puffs,no Pastry Per Piece,3.99,pastry,yes Special Pastry Per Piece,4.49,pastry,yes Kulfi Per Piece,2.99,pastry,yes Jam Rolls,2.99,pastry,yes Cup Cakes,2.99,pastry,yes Coconut Bun,2.99,buns,yes Dilkush,3.49,buns,yes Cream Bun,3.49,buns,yes Masala Chai,2.49,beverage,yes Coffee,2.99,beverage,yes Mango Lassi,5.00,beverage,yes Rose Milk,5.00,beverage,yes Soda,1.49,beverage,yes Water,1.00,beverage,yes Cake flavours: Black Forest, Choco-Mousse, Mango, Mixedfruit, Tiramisu, Strawberry, Pineapple, Butterscotch, Pistashio, Vanilla, Rasamalai, Gulabjamun, Vancho, Ferrero
+
+
+caller> Hi, it's Priya again. Two samosas please.
+agent > Sure, two samosas. Would you like pickup or delivery, and when would you like them?
+
+
+════════════════════════════════════════════════════════════════════════
+CONTEXT FOR TURN — caller +919876543210 (Priya) · session 72825c2d
+════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────────────────────────
+
+--- LIVE: name usage across the call ---
+
+========================================================================
+Replies using the name: [1] (of 3)
+Name used at most twice: True

@@ -1,0 +1,28 @@
+LAYER 18 — HANGUP DELAY HINT
+Timestamp: 2026-08-19 10:15:27
+============================================================
+The LLM already flags the end via [[END_CALL]] -> call_ended: true.
+Added only the delay hint so telephony knows how long to wait for TTS
+to finish speaking before dropping the line.
+
+NO timer/sleep code. One config value, one response field.
+  CALL_END_DELAY_SECONDS=20   (.env)
+  end_delay_seconds: 20 when ended, 0 when the call is still open
+
+plugins: anyio-4.14.2
+collecting ... collected 4 items
+
+tests/test_18_end_delay.py::test_default_delay_is_20_seconds PASSED      [ 25%]
+tests/test_18_end_delay.py::test_ended_call_carries_the_delay PASSED     [ 50%]
+tests/test_18_end_delay.py::test_open_call_has_no_delay PASSED           [ 75%]
+tests/test_18_end_delay.py::test_api_returns_the_flag_and_delay PASSED   [100%]
+
+============================== 4 passed in 0.14s ===============================
+
+--- LIVE: POST /chat on a delivery decline ---
+{
+    "answer": "Thanks for calling. Please place your delivery order at cakeworldeatery.com. CakeWorld Alpharetta.",
+    "session_id": "a4c895c6-272a-478d-b3c3-41c2b428d0b2",
+    "call_ended": true,
+    "end_delay_seconds": 20
+}

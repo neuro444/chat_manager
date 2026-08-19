@@ -1,0 +1,20 @@
+LAYER 8 — BUDGET
+Timestamp: 2026-08-19 08:17:17
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.11.11, pytest-9.1.1, pluggy-1.6.0 -- /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collecting ... collected 7 items
+
+tests/test_08_budget.py::test_huge_context_is_trimmed_under_budget PASSED [ 14%]
+tests/test_08_budget.py::test_huge_history_is_trimmed_under_budget PASSED [ 28%]
+tests/test_08_budget.py::test_user_message_never_trimmed PASSED          [ 42%]
+tests/test_08_budget.py::test_user_message_always_last PASSED            [ 57%]
+tests/test_08_budget.py::test_system_prompt_always_first PASSED          [ 71%]
+tests/test_08_budget.py::test_each_layer_respects_its_weight PASSED      [ 85%]
+tests/test_08_budget.py::test_trim_cuts_on_boundary_not_mid_sentence PASSED [100%]
+
+============================== 7 passed in 0.01s ===============================

@@ -1,0 +1,77 @@
+LAYER 12 — STAFF DASHBOARD + VOICE (phone ordering)
+Timestamp: 2026-08-19 08:54:16
+============================================================
+Identity model: user_id IS the caller's phone number. No login.
+
+--- RED ---
+6 failed (no /callers, /search, or dashboard page yet)
+
+--- BUG FOUND BY LIVE TEST ---
+GET /sessions?user_id=+919876543210 returned []  while /callers showed 2.
+Cause: a raw '+' in a query string decodes to a space, so the API
+received ' 919876543210'. Every E.164 caller lookup silently failed.
+Fix: _caller() normalization at the API boundary + 2 regression tests.
+
+--- GREEN: automated ---
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collecting ... collected 8 items
+
+tests/test_11_dashboard_api.py::test_callers_endpoint_lists_distinct_phone_numbers PASSED [ 12%]
+tests/test_11_dashboard_api.py::test_caller_row_has_session_and_message_counts PASSED [ 25%]
+tests/test_11_dashboard_api.py::test_sessions_include_message_count_and_timestamp PASSED [ 37%]
+tests/test_11_dashboard_api.py::test_messages_include_timestamps_for_bubbles PASSED [ 50%]
+tests/test_11_dashboard_api.py::test_search_sessions_returns_preview PASSED [ 62%]
+tests/test_11_dashboard_api.py::test_dashboard_page_served PASSED        [ 75%]
+tests/test_11_dashboard_api.py::test_phone_numbers_with_plus_are_matched PASSED [ 87%]
+tests/test_11_dashboard_api.py::test_search_handles_plus_prefixed_numbers PASSED [100%]
+
+============================== 8 passed in 0.21s ===============================
+
+--- LIVE: real phone-order conversation + dashboard ---
+═══ CALL 1 ═══
+caller> Hi, I'd like to order two chicken biryani and one garlic naan.
+agent > Sure—two chicken biryanis and one garlic naan. What spice level would you like for the biryanis, and is this for pickup or delivery?
+
+caller> Make the biryani medium spicy please.
+agent > Got it: two medium-spicy chicken biryanis and one garlic naan. Is that for pickup or delivery, and roughly when would you like it?
+
+caller> Pickup, in about thirty minutes. Can you read back my order?
+agent > Your pickup order is two medium-spicy chicken biryanis and one garlic naan, ready in about thirty minutes. Is that correct?
+
+═══ CALL 2 — same number, NEW session (tests cross-session memory) ═══
+caller> Hi, it's me again. What did I order last time?
+agent > Last time, you ordered two chicken biryanis and one garlic naan for pickup, requested in about thirty minutes.
+
+═══ DASHBOARD ═══
+--- /callers ---
+[
+    {
+        "user_id": "+919876543210",
+        "session_count": 2,
+        "message_count": 8,
+        "last_active": "2026-08-19T12:54:25.861763+00:00"
+    }
+]
+--- /sessions ---
+[
+    {
+        "session_id": "d09a16fb-d3aa-4111-a09c-d5099b94365a",
+        "title": "Hi, it's me again. What did I order last time?",
+        "message_count": 2,
+        "updated_at": "2026-08-19T12:54:25.861763+00:00",
+        "running_summary": ""
+    },
+    {
+        "session_id": "4d8140cb-05e3-4be7-9acd-b22993586e13",
+        "title": "Hi, I'd like to order two chicken biryani and one ",
+        "message_count": 6,
+        "updated_at": "2026-08-19T12:54:24.288517+00:00",
+        "running_summary": ""
+    }
+]
+--- / (dashboard page) ---
+HTTP 200, 1446 bytes
+
+--- LIVE: ElevenLabs TTS ---
+PASS - 39332 bytes mp3, header b'ID3'

@@ -1,0 +1,45 @@
+LAYER 16 — TOOL INVOCATION VERIFIED
+Timestamp: 2026-08-19 09:59:02
+============================================================
+GAP THIS CLOSES:
+  Earlier tests asserted only that the TOTAL was correct. That is too
+  weak — the model could do the arithmetic itself and happen to be
+  right. Nothing proved the calculator tool actually ran.
+
+  Fixed by instrumenting orders.tools.run_tool and asserting on real
+  invocations, both with a fake provider and against the live API.
+
+--- GREEN: automated ---
+plugins: anyio-4.14.2
+collecting ... collected 8 items
+
+tests/test_16_tool_calls.py::test_tool_schemas_are_well_formed PASSED    [ 12%]
+tests/test_16_tool_calls.py::test_price_order_tool_returns_correct_totals PASSED [ 25%]
+tests/test_16_tool_calls.py::test_lookup_item_tool PASSED                [ 37%]
+tests/test_16_tool_calls.py::test_unknown_item_is_reported_not_invented PASSED [ 50%]
+tests/test_16_tool_calls.py::test_unknown_tool_name_is_handled PASSED    [ 62%]
+tests/test_16_tool_calls.py::test_service_offers_tools_to_the_provider PASSED [ 75%]
+tests/test_16_tool_calls.py::test_answer_is_derived_from_tool_result PASSED [ 87%]
+tests/test_16_tool_calls.py::test_provider_without_tool_support_still_works PASSED [100%]
+
+============================== 8 passed in 0.01s ===============================
+
+--- LIVE: real OpenAI, instrumented tool runner ---
+caller> Two samosas and one gobi manchurian please.
+agent > Got it: two samosas and one Gobi Manchurian. Your total is twenty-five eighty-three. Is that for pickup or delivery, and when would you like it?
+
+caller> That's everything. What's my total?
+agent > Your total is twenty-five eighty-three, including tax. Is that correct, and would you like pickup or delivery?
+
+============================================================
+TOOL INVOCATIONS: 2
+  price_order({"items":[{"name":"Samosa","quantity":2},{"name":"Gobi Manchurian","quantity":1}]})
+    -> {"items": [{"name": "Samosa", "price": 5.99, "quantity": 2, "line_total": 11.98}, {"name": "Gobi Manchurian", "price": 1
+  price_order({"items":[{"name":"Samosa","quantity":2},{"name":"Gobi Manchurian","quantity":1}]})
+    -> {"items": [{"name": "Samosa", "price": 5.99, "quantity": 2, "line_total": 11.98}, {"name": "Gobi Manchurian", "price": 1
+
+price_order invoked        : True
+arguments match the order  : True
+tool total == ground truth : True  ($25.83)
+
+PASS

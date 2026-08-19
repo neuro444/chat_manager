@@ -1,0 +1,61 @@
+LAYER 13 — MENU, ORDER CALCULATOR, CALLER NAMES, SESSION EXPIRY
+Timestamp: 2026-08-19 09:31:02
+============================================================
+Menu: Cake World Alpharetta — 153 items
+Raw JSON ~4990 tokens (over the 2275-token domain budget -> would be
+truncated mid-menu). Compact rendering: ~1029 tokens, all items intact.
+
+--- BUGS FOUND ---
+1. Tool loop crashed: KeyError 'role' — function_call items carry no
+   role key. Fixed with .get('role') in split_instructions().
+2. Cross-session recall returned nothing: caller says 'samosas',
+   later query is 'samosa'. FTS5 does NO stemming, so exact-token
+   matching missed it. Fixed with prefix queries (samosa*).
+3. Vague follow-ups ('what did I get last time?') share no keywords
+   with the order. Added a last-call fallback for history questions.
+4. My own live assertion was wrong — it demanded digits while the
+   prompt requires spoken prices. The code was already correct.
+
+--- GREEN: automated ---
+plugins: anyio-4.14.2
+collecting ... collected 13 items
+
+tests/test_13_menu_orders.py::test_calculator_matches_spec_example PASSED [  7%]
+tests/test_13_menu_orders.py::test_calculator_empty_order PASSED         [ 15%]
+tests/test_13_menu_orders.py::test_calculator_rounds_to_cents PASSED     [ 23%]
+tests/test_13_menu_orders.py::test_calculator_defaults_quantity_to_one PASSED [ 30%]
+tests/test_13_menu_orders.py::test_calculator_rejects_negative_quantity PASSED [ 38%]
+tests/test_13_menu_orders.py::test_menu_loads_all_items PASSED           [ 46%]
+tests/test_13_menu_orders.py::test_menu_prompt_fits_budget PASSED        [ 53%]
+tests/test_13_menu_orders.py::test_menu_prompt_contains_every_item_and_price PASSED [ 61%]
+tests/test_13_menu_orders.py::test_find_item_exact_and_fuzzy PASSED      [ 69%]
+tests/test_13_menu_orders.py::test_caller_name_is_stored_and_reused PASSED [ 76%]
+tests/test_13_menu_orders.py::test_name_extracted_from_conversation PASSED [ 84%]
+tests/test_13_menu_orders.py::test_expired_session_starts_fresh PASSED   [ 92%]
+tests/test_13_menu_orders.py::test_recent_session_is_resumed PASSED      [100%]
+
+============================== 13 passed in 0.01s ==============================
+
+--- LIVE: full order with tool-computed totals ---
+═══ CALL 1 ═══
+caller> Hi, this is Priya. What veg appetizers do you have?
+agent > Hi Priya. Our vegetarian appetizers are samosa, Gobi Kondattam, Gobi Manchurian, chilli paneer, chilli idly, grilled paneer with vegetables, Kandari paneer, cut mirchi, and onion beetroot pakoda. Would you like to order any of these?
+
+caller> I'll take two samosas and one gobi manchurian.
+agent > Got it, Priya: two samosas and one Gobi Manchurian. Your current total is twenty-five eighty-three. What else would you like?
+
+caller> What's my total?
+agent > Your total is twenty-five eighty-three, including tax. Would you like to add anything else?
+
+───────────────────────────────────────────────────────
+Ground truth: subtotal $23.97 tax $1.86 total $25.83
+Total quoted correctly : True
+Name captured          : 'Priya'
+
+═══ CALL 2 — new session, returning caller ═══
+caller> Hi, it's me. What did I get last time?
+agent > Hi Priya. Last time, you ordered two samosas and one Gobi Manchurian. Would you like the same order today?
+
+Recalled past order    : True
+
+PASS

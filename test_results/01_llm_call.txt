@@ -1,0 +1,45 @@
+LAYER 1 — LLM CALL + CONTEXT ASSEMBLY
+Timestamp: 2026-08-19 08:08:00
+API: OpenAI Responses API (client.responses.create)
+Model: gpt-5.6-luna
+============================================================
+
+--- RED (test written before code) ---
+ModuleNotFoundError: No module named 'providers.fake_provider'
+-> test was wired to real code, not passing vacuously.
+
+--- GREEN: automated (FakeProvider, no network) ---
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collecting ... collected 6 items
+
+tests/test_01_llm.py::test_assemble_puts_system_prompt_first PASSED      [ 16%]
+tests/test_01_llm.py::test_assemble_puts_user_message_last PASSED        [ 33%]
+tests/test_01_llm.py::test_assemble_includes_history_between PASSED      [ 50%]
+tests/test_01_llm.py::test_context_blocks_appear_when_provided PASSED    [ 66%]
+tests/test_01_llm.py::test_no_empty_context_block_when_nothing_provided PASSED [ 83%]
+tests/test_01_llm.py::test_provider_receives_assembled_messages_and_replies PASSED [100%]
+
+============================== 6 passed in 0.01s ===============================
+
+--- LIVE: real OpenAI call ---
+
+=== CALLING OPENAI ===
+
+=== REPLY ===
+Your name is Sree, and you’re building a chat management boilerplate in Python.
+
+Context was used (name recalled): True
+PASS
+
+--- LIVE: streaming ---
+=== STREAMING ===
+One two three four five
+
+chunks received: 5
+PASS
+
+============================================================
+AUTOMATED: PASS (6/6)
+LIVE CALL: PASS  (recalled name + project from context blocks)
+STREAMING: PASS  (10 incremental deltas)

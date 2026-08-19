@@ -1,0 +1,81 @@
+LAYER 10 — API
+Timestamp: 2026-08-19 08:17:17
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.11.11, pytest-9.1.1, pluggy-1.6.0 -- /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collecting ... collected 6 items
+
+tests/test_10_api.py::test_health PASSED                                 [ 16%]
+tests/test_10_api.py::test_chat_returns_reply_and_session PASSED         [ 33%]
+tests/test_10_api.py::test_chat_continues_session PASSED                 [ 50%]
+tests/test_10_api.py::test_empty_message_rejected PASSED                 [ 66%]
+tests/test_10_api.py::test_sessions_scoped_by_user PASSED                [ 83%]
+tests/test_10_api.py::test_delete_session PASSED                         [100%]
+
+============================== 6 passed in 0.19s ===============================
+
+--- LIVE: curl against a running uvicorn server ---
+=== 1. GET /health ===
+{
+    "status": "ok",
+    "storage": "sqlite",
+    "model": "gpt-5.6-luna"
+}
+
+=== 2. POST /chat  (turn 1, states a fact) ===
+{
+    "answer": "Nice to meet you, Sree! I\u2019ll remember that MongoDB is your favorite database.",
+    "session_id": "c81d7934-5b1a-4f95-a912-b5dbef91aaa7"
+}
+
+=== 3. POST /chat  (turn 2, same session, tests memory) ===
+{
+    "answer": "Your favourite database is MongoDB.",
+    "session_id": "c81d7934-5b1a-4f95-a912-b5dbef91aaa7"
+}
+
+=== 4. GET /sessions ===
+[
+    {
+        "session_id": "c81d7934-5b1a-4f95-a912-b5dbef91aaa7",
+        "title": "My name is Sree and my favourite database is Mongo"
+    }
+]
+
+=== 5. GET /sessions/{id}/messages ===
+[
+    {
+        "seq": 1,
+        "role": "user",
+        "content": "My name is Sree and my favourite database is MongoDB."
+    },
+    {
+        "seq": 2,
+        "role": "assistant",
+        "content": "Nice to meet you, Sree! I\u2019ll remember that MongoDB is your favorite database."
+    },
+    {
+        "seq": 3,
+        "role": "user",
+        "content": "What is my favourite database?"
+    },
+    {
+        "seq": 4,
+        "role": "assistant",
+        "content": "Your favourite database is MongoDB."
+    }
+]
+
+=== 6. Scoping: bob must NOT see sree's sessions ===
+[]
+
+=== 7. DELETE /sessions/{id} ===
+{
+    "deleted": "c81d7934-5b1a-4f95-a912-b5dbef91aaa7"
+}
+messages after delete:
+[]

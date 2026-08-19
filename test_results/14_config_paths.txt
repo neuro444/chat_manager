@@ -1,0 +1,28 @@
+LAYER 14 — CONFIG PATHS / DATA DURABILITY
+Timestamp: 2026-08-19 09:43:02
+============================================================
+ISSUE (reported by user): the dashboard showed no past chats.
+  chat_manager.db existed but held 0 users / 0 sessions / 0 messages.
+
+TWO CAUSES:
+  1. My phase-cleanup ran 'rm -f *.db', deleting the demo data.
+     Removed from the workflow; README now warns against it.
+  2. SQLITE_PATH was './chat_manager.db' — cwd-relative. Starting
+     uvicorn from another directory silently created a NEW empty DB,
+     which is indistinguishable from data loss.
+
+FIX: BASE_DIR = Path(__file__).resolve().parent; relative values now
+     resolve against the project dir. Absolute env values still honored.
+
+rootdir: /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collecting ... collected 5 items
+
+tests/test_14_config_paths.py::test_sqlite_path_is_absolute PASSED       [ 20%]
+tests/test_14_config_paths.py::test_sqlite_path_is_inside_project PASSED [ 40%]
+tests/test_14_config_paths.py::test_sqlite_path_identical_from_any_cwd PASSED [ 60%]
+tests/test_14_config_paths.py::test_absolute_env_value_is_respected PASSED [ 80%]
+tests/test_14_config_paths.py::test_data_survives_across_store_instances PASSED [100%]
+
+============================== 5 passed in 0.07s ===============================

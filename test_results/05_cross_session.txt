@@ -1,0 +1,38 @@
+LAYER 5 — CROSS SESSION
+Timestamp: 2026-08-19 08:17:16
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.11.11, pytest-9.1.1, pluggy-1.6.0 -- /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collecting ... collected 7 items
+
+tests/test_05_cross_session.py::test_recalls_fact_from_previous_session[memory] PASSED [ 14%]
+tests/test_05_cross_session.py::test_recalls_fact_from_previous_session[sqlite] PASSED [ 28%]
+tests/test_05_cross_session.py::test_no_memory_block_when_nothing_relevant[memory] PASSED [ 42%]
+tests/test_05_cross_session.py::test_no_memory_block_when_nothing_relevant[sqlite] PASSED [ 57%]
+tests/test_05_cross_session.py::test_current_session_excluded_from_memory[memory] PASSED [ 71%]
+tests/test_05_cross_session.py::test_current_session_excluded_from_memory[sqlite] PASSED [ 85%]
+tests/test_05_cross_session.py::test_memory_survives_restart PASSED      [100%]
+
+============================== 7 passed in 0.05s ===============================
+
+--- LIVE: cross-session recall + scoping (real OpenAI + SQLite) ---
+=== SESSION A (sree states a fact) ===
+you> my project codename is Nightingale and it uses Redis.
+bot> Got it: your project codename is **Nightingale**, and it uses **Redis**.
+
+=== SESSION B (new session, same user) ===
+you> What is my project codename?
+bot> Your project codename is **Nightingale**.
+
+=== SESSION C (different user: bob) ===
+you> What is my project codename?
+bot> I don’t know your project codename yet.
+
+=======================================================
+Cross-session recall (sree)   : True
+Leaked to other user (bob)    : False
+PASS

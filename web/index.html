@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orders — Staff Dashboard</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">📞 Phone Orders <span class="sub">staff dashboard</span></div>
+  <div class="tools">
+    <label class="toggle"><input type="checkbox" id="tts-toggle"> 🔊 Speak replies</label>
+    <span id="status" class="status">—</span>
+  </div>
+</header>
+
+<main class="grid">
+  <aside class="pane callers">
+    <h2>Callers</h2>
+    <div id="callers" class="list"></div>
+  </aside>
+
+  <aside class="pane sessions">
+    <h2>Calls <span id="active-caller" class="muted"></span></h2>
+    <button id="new-chat" class="newbtn">+ New call</button>
+    <input id="search" class="search" placeholder="Search this caller's calls…">
+    <div id="sessions" class="list"></div>
+  </aside>
+
+  <section class="pane chat">
+    <div id="summary" class="summary hidden"></div>
+    <div id="messages" class="messages">
+      <div class="empty">Select a caller to view their conversation.</div>
+    </div>
+    <form id="composer" class="composer">
+      <button type="button" id="mic" class="mic" title="Hold to speak">🎤</button>
+      <input id="input" placeholder="Type as the caller — Enter to send" autocomplete="off">
+      <button type="submit" id="send">Send</button>
+    </form>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>

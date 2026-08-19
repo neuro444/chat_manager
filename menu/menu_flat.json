@@ -1,0 +1,947 @@
+{
+  "restaurant_name": "Cake World, Alpharetta",
+  "restaurant_website": "cakeworldeatery.com",
+  "cuisine": "Kerala / South Indian / Indo-Chinese",
+  "menu_item_fields": [
+    "name",
+    "price",
+    "category",
+    "is_vegetarian"
+  ],
+  "menu_items": [
+    [
+      "Samosa",
+      5.99,
+      "veg_appetizer",
+      true
+    ],
+    [
+      "Gobi Kondattam",
+      11.99,
+      "veg_appetizer",
+      true
+    ],
+    [
+      "Gobi Manchurian",
+      11.99,
+      "veg_appetizer",
+      true
+    ],
+    [
+      "Chilli Paneer",
+      11.99,
+      "veg_appetizer",
+      true
+    ],
+    [
+      "Chilli Idly",
+      10.99,
+      "veg_appetizer",
+      true
+    ],
+    [
+      "Grilled Paneer with Vegetables",
+      11.99,
+      "veg_appetizer",
+      true
+    ],
+    [
+      "Kandari Paneer",
+      11.99,
+      "veg_appetizer",
+      true
+    ],
+    [
+      "Cut Mirchi",
+      9.99,
+      "veg_appetizer",
+      true
+    ],
+    [
+      "Onion Beetroot Pakoda",
+      9.99,
+      "veg_appetizer",
+      true
+    ],
+    [
+      "Kandari Tawa Fish",
+      12.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Bang Bang Fish",
+      12.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Ginger Shrimp",
+      14.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Shrimp Pepper Fry",
+      14.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Chicken Kondattam",
+      12.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Kandari Chicken Fry",
+      12.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Chicken Manchurian",
+      12.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Chilli Chicken",
+      12.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Chicken 65",
+      12.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Chicken 777",
+      12.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Karivepila Chicken",
+      12.99,
+      "non_veg_appetizer",
+      false
+    ],
+    [
+      "Paneer Ambala",
+      12.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Paneer Saag Wala",
+      12.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Paneer Tikka Masala",
+      12.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Paneer Butter Masala",
+      12.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Paneer Kadai",
+      12.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Chole Bhature",
+      11.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Chettinad Veg Curry",
+      11.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Malabar Veg Kuruma",
+      11.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Kerala Black Chana Curry",
+      11.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Dal Fry",
+      10.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Channa Masala",
+      10.99,
+      "veg_curry",
+      true
+    ],
+    [
+      "Chicken Shawarma",
+      12.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Fish Pollichathu",
+      19.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Kethal Chicken Fry",
+      17.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Chicken Egg Kothu Porotta",
+      14.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Kizhi Porotta",
+      16.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Chicken Tikka Masala",
+      13.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Butter Chicken Masala",
+      13.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Chicken Chettinad Fry",
+      13.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Malabar Chicken Curry",
+      13.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Kandari Chicken Masala",
+      13.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Chicken Mappas",
+      13.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Chicken Pepper Roast",
+      13.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Spinach Chicken",
+      13.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Achayan's Fish Curry (King Fish)",
+      14.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Fish Mappas",
+      14.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Fish Moilee",
+      14.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Alleppy Shrimp Curry",
+      15.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Shrimp Roast",
+      15.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Goat Malabar Curry",
+      14.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Goat Chettinad Fry",
+      14.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Goat Pepper Roast",
+      14.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Goat Spinach",
+      14.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Egg Roast",
+      12.99,
+      "non_veg_curry",
+      false
+    ],
+    [
+      "Kizhi Biriyani",
+      15.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Paragon Chicken Biriyani (Kaima Rice)",
+      15.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Meghana Biriyani",
+      15.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Afghani Chicken Biriyani",
+      15.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Ambur Goat Biriyani",
+      17.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Malabar Chicken Biriyani",
+      15.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Malabar Goat Biriyani",
+      17.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Malabar Fish Biriyani",
+      17.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Veg Biriyani",
+      13.99,
+      "biriyani",
+      true
+    ],
+    [
+      "Egg Biriyani",
+      14.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Chettinad Chicken Biriyani",
+      15.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Chettinad Goat Biriyani",
+      17.99,
+      "biriyani",
+      false
+    ],
+    [
+      "Curry Leaf Rice",
+      9.99,
+      "biriyani",
+      true
+    ],
+    [
+      "Tomato Rice",
+      9.99,
+      "biriyani",
+      true
+    ],
+    [
+      "Lemon Rice",
+      9.99,
+      "biriyani",
+      true
+    ],
+    [
+      "Ghee Roast",
+      11.99,
+      "dosa",
+      true
+    ],
+    [
+      "Masala Dosa",
+      11.99,
+      "dosa",
+      true
+    ],
+    [
+      "Mysore Masala Dosa",
+      11.99,
+      "dosa",
+      true
+    ],
+    [
+      "Cheese Pyramid Dosa",
+      11.99,
+      "dosa",
+      true
+    ],
+    [
+      "Paneer Dosa",
+      12.99,
+      "dosa",
+      true
+    ],
+    [
+      "Podi Dosa",
+      11.99,
+      "dosa",
+      true
+    ],
+    [
+      "Thattu Dosa with Egg Omlette",
+      13.99,
+      "dosa",
+      false
+    ],
+    [
+      "Tawa Chicken Dosa",
+      13.99,
+      "dosa",
+      false
+    ],
+    [
+      "Spring Dosa",
+      11.99,
+      "dosa",
+      true
+    ],
+    [
+      "Butter Chicken Dosa",
+      13.99,
+      "dosa",
+      false
+    ],
+    [
+      "Onion Rawa Dosa",
+      11.99,
+      "dosa",
+      true
+    ],
+    [
+      "Bengaluru Ghee Podi Dosa",
+      11.99,
+      "dosa",
+      true
+    ],
+    [
+      "Kids Masala Dosa",
+      7.99,
+      "dosa",
+      true
+    ],
+    [
+      "Kids Cheese Dosa",
+      7.99,
+      "dosa",
+      true
+    ],
+    [
+      "Kids Nutella Dosa",
+      7.99,
+      "dosa",
+      true
+    ],
+    [
+      "Idly (3) with Sambar and Chutney",
+      7.99,
+      "dosa",
+      true
+    ],
+    [
+      "Beef Roast",
+      19.99,
+      "kerala_special",
+      false
+    ],
+    [
+      "Beef Chettinadu Curry",
+      19.99,
+      "kerala_special",
+      false
+    ],
+    [
+      "Beef Pepper Masala",
+      19.99,
+      "kerala_special",
+      false
+    ],
+    [
+      "Beef Perattu",
+      19.99,
+      "kerala_special",
+      false
+    ],
+    [
+      "Beef Ullarthu",
+      21.99,
+      "kerala_special",
+      false
+    ],
+    [
+      "Kerala Beef Fry",
+      21.99,
+      "kerala_special",
+      false
+    ],
+    [
+      "Beef Kizhi Porotta",
+      21.99,
+      "kerala_special",
+      false
+    ],
+    [
+      "Veg Fried Rice",
+      10.99,
+      "indo_chinese",
+      true
+    ],
+    [
+      "Egg Fried Rice",
+      11.99,
+      "indo_chinese",
+      false
+    ],
+    [
+      "Chicken Fried Rice",
+      12.99,
+      "indo_chinese",
+      false
+    ],
+    [
+      "Shrimp Fried Rice",
+      13.99,
+      "indo_chinese",
+      false
+    ],
+    [
+      "Mix Meat Fried Rice",
+      14.99,
+      "indo_chinese",
+      false
+    ],
+    [
+      "Veg Noodles",
+      10.99,
+      "indo_chinese",
+      true
+    ],
+    [
+      "Egg Noodles",
+      11.99,
+      "indo_chinese",
+      false
+    ],
+    [
+      "Chicken Noodles",
+      12.99,
+      "indo_chinese",
+      false
+    ],
+    [
+      "Shrimp Noodles",
+      13.99,
+      "indo_chinese",
+      false
+    ],
+    [
+      "Mix Meat Noodles",
+      14.99,
+      "indo_chinese",
+      false
+    ],
+    [
+      "Bombay Vada Pav",
+      9.99,
+      "bombay",
+      true
+    ],
+    [
+      "Samosa Pav",
+      9.99,
+      "bombay",
+      true
+    ],
+    [
+      "Bombay Sandwich",
+      9.99,
+      "bombay",
+      true
+    ],
+    [
+      "Dabeli",
+      9.99,
+      "bombay",
+      true
+    ],
+    [
+      "Pav Bhaji",
+      9.99,
+      "bombay",
+      true
+    ],
+    [
+      "Dahi Puri",
+      9.99,
+      "bombay",
+      true
+    ],
+    [
+      "Samosa Chaat",
+      8.99,
+      "chaat",
+      true
+    ],
+    [
+      "Aloo Tikki Chaat",
+      8.99,
+      "chaat",
+      true
+    ],
+    [
+      "Aloo Pappadi Chaat",
+      8.99,
+      "chaat",
+      true
+    ],
+    [
+      "Bhel Puri",
+      8.99,
+      "chaat",
+      true
+    ],
+    [
+      "Dahi Bhel Chaat",
+      8.99,
+      "chaat",
+      true
+    ],
+    [
+      "Kachori Chaat",
+      8.99,
+      "chaat",
+      true
+    ],
+    [
+      "Sev Puri",
+      8.99,
+      "chaat",
+      true
+    ],
+    [
+      "Vegetable Panini",
+      8.99,
+      "panini",
+      true
+    ],
+    [
+      "Paneer Tikka Panini",
+      9.99,
+      "panini",
+      true
+    ],
+    [
+      "Chicken Tikka Panini",
+      10.99,
+      "panini",
+      false
+    ],
+    [
+      "Chilli Chicken Panini",
+      10.99,
+      "panini",
+      false
+    ],
+    [
+      "Cheese Sandwich",
+      7.99,
+      "panini",
+      true
+    ],
+    [
+      "Cakeworld Special Chicken Sandwich",
+      10.99,
+      "panini",
+      false
+    ],
+    [
+      "Cheese Pizza",
+      9.99,
+      "pizza",
+      true
+    ],
+    [
+      "Vegetable Pizza",
+      9.99,
+      "pizza",
+      true
+    ],
+    [
+      "Paneer Tikka Pizza",
+      10.99,
+      "pizza",
+      true
+    ],
+    [
+      "Chilli Chicken Pizza",
+      11.99,
+      "pizza",
+      false
+    ],
+    [
+      "Chicken Tikka Pizza",
+      11.99,
+      "pizza",
+      false
+    ],
+    [
+      "Porotta",
+      2.99,
+      "bread",
+      true
+    ],
+    [
+      "Kallappam",
+      1.99,
+      "bread",
+      true
+    ],
+    [
+      "Tattu Dosa (2 piece)",
+      2.99,
+      "bread",
+      true
+    ],
+    [
+      "Naan",
+      1.99,
+      "bread",
+      true
+    ],
+    [
+      "Butter Naan",
+      2.49,
+      "bread",
+      true
+    ],
+    [
+      "Garlic Naan",
+      2.99,
+      "bread",
+      true
+    ],
+    [
+      "Sandwich Bread",
+      2.99,
+      "bakery",
+      true
+    ],
+    [
+      "Pav Bun",
+      2.99,
+      "bakery",
+      true
+    ],
+    [
+      "Vegetable Puffs",
+      2.99,
+      "puffs",
+      true
+    ],
+    [
+      "Paneer Puffs",
+      2.99,
+      "puffs",
+      true
+    ],
+    [
+      "Egg Puffs",
+      3.49,
+      "puffs",
+      false
+    ],
+    [
+      "Chicken Puff",
+      3.49,
+      "puffs",
+      false
+    ],
+    [
+      "Chilli Chicken Roll",
+      3.49,
+      "puffs",
+      false
+    ],
+    [
+      "Pastry Per Piece",
+      3.99,
+      "pastry",
+      true
+    ],
+    [
+      "Special Pastry Per Piece",
+      4.49,
+      "pastry",
+      true
+    ],
+    [
+      "Kulfi Per Piece",
+      2.99,
+      "pastry",
+      true
+    ],
+    [
+      "Jam Rolls",
+      2.99,
+      "pastry",
+      true
+    ],
+    [
+      "Cup Cakes",
+      2.99,
+      "pastry",
+      true
+    ],
+    [
+      "Coconut Bun",
+      2.99,
+      "buns",
+      true
+    ],
+    [
+      "Dilkush",
+      3.49,
+      "buns",
+      true
+    ],
+    [
+      "Cream Bun",
+      3.49,
+      "buns",
+      true
+    ],
+    [
+      "Masala Chai",
+      2.49,
+      "beverage",
+      true
+    ],
+    [
+      "Coffee",
+      2.99,
+      "beverage",
+      true
+    ],
+    [
+      "Mango Lassi",
+      5,
+      "beverage",
+      true
+    ],
+    [
+      "Rose Milk",
+      5,
+      "beverage",
+      true
+    ],
+    [
+      "Soda",
+      1.49,
+      "beverage",
+      true
+    ],
+    [
+      "Water",
+      1,
+      "beverage",
+      true
+    ]
+  ],
+  "cake_flavours": [
+    "Black Forest",
+    "Choco-Mousse",
+    "Mango",
+    "Mixedfruit",
+    "Tiramisu",
+    "Strawberry",
+    "Pineapple",
+    "Butterscotch",
+    "Pistashio",
+    "Vanilla",
+    "Rasamalai",
+    "Gulabjamun",
+    "Vancho",
+    "Ferrero"
+  ]
+}

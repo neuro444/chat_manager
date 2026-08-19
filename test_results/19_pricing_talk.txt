@@ -1,0 +1,42 @@
+LAYER 19 — PRICING CONVERSATION RULES
+Timestamp: 2026-08-19 10:16:50
+============================================================
+ISSUE: agent quoted 'seventeen twenty-three' for a $15.99 biryani.
+The tool was right (15.99 + 7.75% tax) but a taxed figure for a SINGLE
+item does not match the printed menu, so it reads as overcharging.
+
+FIX (prompt only, two distinct moments):
+  1. While discussing items -> plain MENU price, no tax, via lookup_item
+  2. At the final review     -> price_order ONCE, read back each item
+     with quantity and unit price, then the total
+  Tax is never volunteered; explained only if the caller asks.
+
+plugins: anyio-4.14.2
+collecting ... collected 6 items
+
+tests/test_19_pricing_talk.py::test_prompt_says_quote_menu_price_while_discussing PASSED [ 16%]
+tests/test_19_pricing_talk.py::test_prompt_defers_price_order_to_the_final_review PASSED [ 33%]
+tests/test_19_pricing_talk.py::test_prompt_requires_unit_prices_in_the_readback PASSED [ 50%]
+tests/test_19_pricing_talk.py::test_prompt_forbids_volunteering_tax PASSED [ 66%]
+tests/test_19_pricing_talk.py::test_price_order_still_returns_line_items_for_the_readback PASSED [ 83%]
+tests/test_19_pricing_talk.py::test_lookup_item_gives_the_untaxed_menu_price PASSED [100%]
+
+============================== 6 passed in 0.01s ===============================
+
+--- LIVE ---
+caller> How much is the Malabar Chicken Biriyani?
+agent > Malabar Chicken Biriyani is fifteen ninety-nine. Would that be for pickup or delivery?
+
+caller> I'll take one of those and two samosas.
+agent > Certainly—one Malabar Chicken Biriyani and two samosas. Would that be for pickup or delivery?
+
+caller> That's everything, pickup please.
+agent > That’s one Malabar Chicken Biriyani at fifteen ninety-nine and two samosas at five ninety-nine each. Your total is thirty fourteen, and it’ll be ready for pickup in about twenty minutes. Shall I place the order?
+
+==========================================================
+Discussion quoted MENU price (15.99) : True
+Discussion leaked TAXED price (17.23): False
+Review read back unit prices         : True
+Review gave the total                : True
+
+PASS

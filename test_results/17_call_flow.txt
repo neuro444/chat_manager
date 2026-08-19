@@ -1,0 +1,62 @@
+LAYER 17 — CALL FLOW (ambiguity, delivery, sign-off, end flag)
+Timestamp: 2026-08-19 10:13:47
+============================================================
+PROBLEM: agent looped on 'which chicken biryani?' (15 variants),
+stalling the call instead of settling it.
+
+FIX (prompt-driven, plus a 3-line callflow module):
+ - ask ONCE, naming the closest real item as a yes/no question
+ - never conclude while an item is unclear
+ - settle pickup/delivery by the 2nd-3rd reply
+ - delivery -> cakeworldeatery.com, offer pickup instead, else end
+ - pickup confirmations end with 'CakeWorld Alpharetta'
+ - [[END_CALL]] marker flags the finished call (stripped before speech)
+
+
+tests/test_17_call_flow.py::test_detect_call_end[Your order is ready. CakeWorld Alpharetta. [[END_CALL]]-True] PASSED [  9%]
+tests/test_17_call_flow.py::test_detect_call_end[Please order at cakeworldeatery.com. [[END_CALL]]-True] PASSED [ 18%]
+tests/test_17_call_flow.py::test_detect_call_end[Would that be pickup or delivery?-False] PASSED [ 27%]
+tests/test_17_call_flow.py::test_detect_call_end[Two samosas, got it.-False] PASSED [ 36%]
+tests/test_17_call_flow.py::test_marker_is_stripped_from_spoken_text PASSED [ 45%]
+tests/test_17_call_flow.py::test_strip_is_safe_when_absent PASSED        [ 54%]
+tests/test_17_call_flow.py::test_session_marked_ended_in_metadata PASSED [ 63%]
+tests/test_17_call_flow.py::test_open_call_is_not_marked_ended PASSED    [ 72%]
+tests/test_17_call_flow.py::test_ended_session_is_not_resumed PASSED     [ 81%]
+tests/test_17_call_flow.py::test_prompt_states_the_delivery_website PASSED [ 90%]
+tests/test_17_call_flow.py::test_prompt_states_pickup_signoff_and_one_clarification PASSED [100%]
+
+============================== 11 passed in 0.01s ==============================
+
+--- LIVE ---
+caller> Hi, I'd like one chicken biryani.
+agent > We have Malabar Chicken Biriyani on the menu—would you like that one? And would that be for pickup or delivery?
+
+caller> Yes that's fine.
+agent > Great. Would that be for pickup or delivery?
+
+caller> Pickup please. That's everything.
+agent > One Malabar Chicken Biriyani is seventeen twenty-three, ready for pickup in about twenty minutes. Does that work for you?
+
+caller> Yes, that works.
+agent > Thanks, that’s one Malabar Chicken Biriyani, seventeen twenty-three, ready for pickup in about twenty minutes. CakeWorld Alpharetta   [CALL ENDED]
+
+═══ B. NOT ON THE MENU ═══
+caller> Do you have Malayalee chicken biryani?
+agent > We don’t have Malayalee Chicken Biriyani, but we do have Malabar Chicken Biriyani. Would you like that one, and will this be for pickup or delivery?
+
+═══ C. DELIVERY REDIRECT ═══
+caller> I want two samosas delivered to my house.
+agent > We don’t take delivery orders by phone; delivery orders can be placed at cakeworldeatery.com. Would you like to place a pickup order instead?
+
+caller> No thanks, I'll just order online.
+agent > Certainly. Please place your delivery order at cakeworldeatery.com. Thanks for calling CakeWorld Alpharetta.   [CALL ENDED]
+
+============================================================
+A: clarified without looping   : True
+A: pickup sign-off present     : True
+A: call flagged ended          : True
+B: offered a real menu item    : True
+C: gave the delivery website   : True
+C: call flagged ended          : True
+
+PASS

@@ -1,0 +1,22 @@
+LAYER 9 — CARRYOVER
+Timestamp: 2026-08-19 08:17:17
+============================================================
+============================= test session starts ==============================
+platform darwin -- Python 3.11.11, pytest-9.1.1, pluggy-1.6.0 -- /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/sreekanthgopi/Desktop/Maria/Chat_Manager/chat_manager_repo
+configfile: pytest.ini
+plugins: anyio-4.14.2
+collecting ... collected 9 items
+
+tests/test_09_carryover.py::test_entity_extraction[Tell me about Paris-expected0] PASSED [ 11%]
+tests/test_09_carryover.py::test_entity_extraction[Compare Tokyo and Berlin-expected1] PASSED [ 22%]
+tests/test_09_carryover.py::test_entity_extraction[what is the weather-expected2] PASSED [ 33%]
+tests/test_09_carryover.py::test_entity_extraction[yes-expected3] PASSED [ 44%]
+tests/test_09_carryover.py::test_entity_extraction[The quick brown fox-expected4] PASSED [ 55%]
+tests/test_09_carryover.py::test_followup_inherits_previous_entity PASSED [ 66%]
+tests/test_09_carryover.py::test_explicit_entity_overrides_inherited PASSED [ 77%]
+tests/test_09_carryover.py::test_never_invents_entities PASSED           [ 88%]
+tests/test_09_carryover.py::test_carryover_scans_back_multiple_turns PASSED [100%]
+
+============================== 9 passed in 0.01s ===============================
