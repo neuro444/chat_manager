@@ -172,9 +172,10 @@ def test_cake_and_catering_callback_is_a_multi_turn_conversation():
 
     assert "Cake orders are handled by my manager" in SYSTEM_PROMPT
     assert "Catering orders are handled by my manager" in SYSTEM_PROMPT
-    assert "Could I ask the manager to call you back?" in SYSTEM_PROMPT
-    assert "Could you please describe your requirements?" in SYSTEM_PROMPT
-    assert "do not combine its two questions" in SYSTEM_PROMPT
+    assert "If you share the details with me" in SYSTEM_PROMPT
+    assert "May I have the order details, please?" in SYSTEM_PROMPT
+    assert "your requirements?" in SYSTEM_PROMPT
+    assert "EVERY cake, catering, or combined inquiry" in SYSTEM_PROMPT
     assert "do not take cake orders" not in SYSTEM_PROMPT
     assert "do not take catering orders" not in SYSTEM_PROMPT
     assert "discussion for as many turns as needed" in SYSTEM_PROMPT
