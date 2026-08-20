@@ -92,3 +92,13 @@ def test_delete_session(client):
     sid = client.post("/chat", json={"user_id": "u1", "message": "hi"}).json()["session_id"]
     client.delete(f"/sessions/{sid}")
     assert client.get(f"/sessions/{sid}/messages").json() == []
+
+
+def test_delete_caller_removes_all_sessions(client):
+    client.post("/chat", json={"user_id": "+15550001", "message": "first"})
+    client.post("/chat", json={"user_id": "+15550001", "message": "second"})
+    assert len(client.get("/sessions", params={"user_id": "+15550001"}).json()) == 2
+    response = client.delete("/callers", params={"user_id": "+15550001"})
+    assert response.status_code == 200
+    assert response.json() == {"deleted": "+15550001"}
+    assert client.get("/sessions", params={"user_id": "+15550001"}).json() == []

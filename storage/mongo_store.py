@@ -49,6 +49,16 @@ class MongoStore:
         self.ensure_user(user_id)
         self.db.users.update_one({"_id": user_id}, {"$set": {"name": name}})
 
+    def delete_user(self, user_id):
+        session_ids = [doc["_id"] for doc in self.db.sessions.find(
+            {"user_id": user_id}, {"_id": 1}
+        )]
+        if session_ids:
+            self.db.messages.delete_many({"session_id": {"$in": session_ids}})
+            self.db.counters.delete_many({"_id": {"$in": session_ids}})
+            self.db.sessions.delete_many({"_id": {"$in": session_ids}})
+        self.db.users.delete_one({"_id": user_id})
+
     # ── sessions ─────────────────────────
     def _to_session(self, d):
         return Session(

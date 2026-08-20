@@ -89,6 +89,13 @@ def callers():
     return out
 
 
+@app.delete("/callers")
+def delete_caller(user_id: str):
+    user_id = _caller(user_id)
+    get_repo().delete_user(user_id)
+    return {"deleted": user_id}
+
+
 @app.get("/sessions")
 def sessions(user_id: str = "default"):
     repo = get_repo()

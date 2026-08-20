@@ -1,6 +1,9 @@
 // Staff dashboard. Callers are phone numbers; there is no login.
 const $ = (id) => document.getElementById(id);
-const state = { caller: null, session: null, sessions: [], forceNewSession: false };
+const state = {
+  caller: null, session: null, sessions: [], forceNewSession: false,
+  callerFilter: "",
+};
 const debugFields = [
   "latest-query", "chat-history", "session-summary", "caller-profile",
   "cross-session-memory", "reference-data", "system-prompt", "combined-input",
@@ -45,19 +48,52 @@ async function api(path, opts) {
 
 // ── callers ──────────────────────────────
 async function loadCallers() {
-  const rows = await api("/callers");
+  const allRows = await api("/callers");
+  const query = state.callerFilter.toLowerCase();
+  const rows = allRows.filter((c) =>
+    `${c.name || ""} ${c.user_id}`.toLowerCase().includes(query));
   const box = $("callers");
   box.innerHTML = "";
-  if (!rows.length) { box.innerHTML = '<div class="empty">No calls yet.</div>'; return; }
+  if (!rows.length) { box.innerHTML = '<div class="empty">No matching callers.</div>'; return; }
   rows.forEach((c) => {
+    const wrap = document.createElement("div");
+    wrap.className = "row-wrap";
     const el = document.createElement("button");
     el.className = "row" + (c.user_id === state.caller ? " active" : "");
     const label = c.name ? `${c.name} · ${c.user_id}` : c.user_id;
     el.innerHTML = `<div class="title">${label}</div>
       <div class="meta">${c.session_count} call(s) · ${c.message_count} msgs<br>${fmtTime(c.last_active)}</div>`;
     el.onclick = () => selectCaller(c.user_id);
-    box.appendChild(el);
+    const del = document.createElement("button");
+    del.className = "delete-btn";
+    del.title = "Delete caller and every session";
+    del.textContent = "Delete";
+    del.onclick = () => deleteCaller(c.user_id);
+    wrap.append(el, del);
+    box.appendChild(wrap);
   });
+}
+
+$("caller-search").oninput = (event) => {
+  state.callerFilter = event.target.value.trim();
+  loadCallers();
+};
+
+async function deleteCaller(userId) {
+  if (!confirm(`Delete ${userId} and ALL of this caller's sessions and messages?`)) return;
+  await api(`/callers?user_id=${encodeURIComponent(userId)}`, { method: "DELETE" });
+  if (state.caller === userId) {
+    state.caller = null;
+    state.session = null;
+    state.sessions = [];
+    state.forceNewSession = false;
+    $("active-caller").textContent = "";
+    $("sessions").innerHTML = "";
+    $("messages").innerHTML = '<div class="empty">Select a caller.</div>';
+    $("summary").classList.add("hidden");
+    clearLlmDebug();
+  }
+  await loadCallers();
 }
 
 async function selectCaller(userId) {
@@ -80,6 +116,8 @@ async function loadSessions(previews = {}) {
   box.innerHTML = "";
   if (!state.sessions.length) { box.innerHTML = '<div class="empty">No calls.</div>'; return; }
   state.sessions.forEach((s) => {
+    const wrap = document.createElement("div");
+    wrap.className = "row-wrap";
     const el = document.createElement("button");
     el.className = "row" + (s.session_id === state.session ? " active" : "");
     const preview = previews[s.session_id]
@@ -87,8 +125,27 @@ async function loadSessions(previews = {}) {
     el.innerHTML = `<div class="title">${s.title.slice(0, 60)}</div>${preview}
       <div class="meta">${fmtTime(s.updated_at)} · ${s.message_count} messages</div>`;
     el.onclick = () => openSession(s.session_id);
-    box.appendChild(el);
+    const del = document.createElement("button");
+    del.className = "delete-btn";
+    del.title = "Delete this session";
+    del.textContent = "Delete";
+    del.onclick = () => deleteSession(s.session_id);
+    wrap.append(el, del);
+    box.appendChild(wrap);
   });
+}
+
+async function deleteSession(sessionId) {
+  if (!confirm("Delete this session and all of its messages?")) return;
+  await api(`/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+  if (state.session === sessionId) {
+    state.session = null;
+    $("messages").innerHTML = '<div class="empty">Session deleted.</div>';
+    $("summary").classList.add("hidden");
+    clearLlmDebug();
+  }
+  await loadSessions();
+  await loadCallers();
 }
 
 async function openSession(sid) {
@@ -115,7 +172,18 @@ function renderMessages(msgs) {
 function bubble(role, text, ts) {
   const d = document.createElement("div");
   d.className = `bubble ${role}`;
-  d.textContent = text;
+  const content = document.createElement("span");
+  content.textContent = text;
+  d.appendChild(content);
+  const copy = document.createElement("button");
+  copy.className = "copy-btn";
+  copy.textContent = "Copy";
+  copy.onclick = async () => {
+    await navigator.clipboard.writeText(text);
+    copy.textContent = "Copied";
+    setTimeout(() => { copy.textContent = "Copy"; }, 1200);
+  };
+  d.appendChild(copy);
   if (ts) { const s = document.createElement("span");
             s.className = "ts"; s.textContent = fmtTime(ts); d.appendChild(s); }
   return d;

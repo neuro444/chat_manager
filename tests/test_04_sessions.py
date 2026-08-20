@@ -53,6 +53,16 @@ def test_delete_session_removes_messages(store):
     assert store.all_messages(sid) == []
 
 
+def test_delete_user_removes_profile_sessions_and_messages(store):
+    first = handle_message(store, FakeProvider(), "u1", None, "first")
+    second = handle_message(store, FakeProvider(), "u1", None, "second")
+    store.delete_user("u1")
+    assert store.get_user("u1") is None
+    assert store.list_sessions("u1") == []
+    assert store.all_messages(first["session_id"]) == []
+    assert store.all_messages(second["session_id"]) == []
+
+
 def test_clear_session_keeps_session_drops_messages(store):
     sid = handle_message(store, FakeProvider(), "u1", None, "hi")["session_id"]
     store.update_summary(sid, "old summary", 2)

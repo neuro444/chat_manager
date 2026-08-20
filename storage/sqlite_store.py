@@ -102,6 +102,19 @@ class SQLiteStore:
         self.conn.execute("UPDATE users SET name=? WHERE user_id=?", (name, user_id))
         self.conn.commit()
 
+    def delete_user(self, user_id):
+        session_ids = [row["session_id"] for row in self.conn.execute(
+            "SELECT session_id FROM sessions WHERE user_id=?", (user_id,)
+        ).fetchall()]
+        for session_id in session_ids:
+            self.conn.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
+            self.conn.execute(
+                "DELETE FROM messages_fts WHERE session_id=?", (session_id,)
+            )
+        self.conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+        self.conn.execute("DELETE FROM users WHERE user_id=?", (user_id,))
+        self.conn.commit()
+
     # ── sessions ─────────────────────────
     def _row_to_session(self, r):
         return Session(
