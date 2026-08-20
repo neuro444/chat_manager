@@ -97,3 +97,15 @@ def test_cross_session_context_is_capped_at_configured_message_window(store):
     current = store.create_session("+1555").session_id
     memory = build_memory_context(store, "+1555", "new order", current)
     assert memory.count("past-message-") == config.CROSS_SESSION_MESSAGE_WINDOW
+
+
+def test_five_recent_sessions_each_receive_transcript_space(store):
+    for call in range(6):
+        sid = store.create_session("+1666").session_id
+        for turn in range(12):
+            store.append_message(sid, "user", f"call-{call}-turn-{turn}")
+    current = store.create_session("+1666").session_id
+    memory = build_memory_context(store, "+1666", "new order", current)
+    assert memory.count("Previous call —") == config.CROSS_SESSION_SESSION_WINDOW
+    for call in range(1, 6):
+        assert f"call-{call}-turn-11" in memory

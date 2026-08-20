@@ -37,6 +37,7 @@ GUARDED = [
     ("get", "/callers"),
     ("get", "/sessions?user_id=%2B15551234567"),
     ("get", "/search?user_id=%2B15551234567&q=samosa"),
+    ("get", "/staff/search?q=samosa"),
 ]
 
 

@@ -83,6 +83,41 @@ $("caller-search").oninput = (event) => {
   loadCallers();
 };
 
+let globalSearchTimer;
+$("global-search").oninput = (event) => {
+  clearTimeout(globalSearchTimer);
+  const query = event.target.value.trim();
+  globalSearchTimer = setTimeout(async () => {
+    if (!query) return loadCallers();
+    const hits = await api(`/staff/search?q=${encodeURIComponent(query)}`);
+    const box = $("callers");
+    box.innerHTML = "";
+    if (!hits.length) {
+      box.innerHTML = '<div class="empty">No conversation matches.</div>';
+      return;
+    }
+    hits.forEach((hit) => {
+      const button = document.createElement("button");
+      button.className = "row global-result";
+      const title = document.createElement("div");
+      title.className = "title";
+      title.textContent = hit.user_id;
+      const preview = document.createElement("div");
+      preview.className = "preview";
+      preview.textContent = hit.preview;
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = fmtTime(hit.created_at);
+      button.append(title, preview, meta);
+      button.onclick = async () => {
+        await selectCaller(hit.user_id);
+        await openSession(hit.session_id);
+      };
+      box.appendChild(button);
+    });
+  }, 250);
+};
+
 async function deleteCaller(userId) {
   if (!confirm(`Delete ${userId} and ALL of this caller's sessions and messages?`)) return;
   await api(`/callers?user_id=${encodeURIComponent(userId)}`, { method: "DELETE" });

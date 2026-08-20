@@ -152,6 +152,27 @@ def search(user_id: str, q: str):
     ]
 
 
+@app.get("/staff/search", dependencies=[Depends(require_api_key)])
+def staff_search(q: str):
+    """Authenticated staff search across caller phone numbers and sessions."""
+    query = (q or "").strip()
+    if not query:
+        return []
+    repo = get_repo()
+    results = []
+    for caller in repo.list_callers(limit=200):
+        user_id = caller["user_id"]
+        for hit in repo.search_messages(user_id, query, "", 5):
+            results.append({
+                "user_id": user_id,
+                "session_id": hit.session_id,
+                "preview": hit.content[:160],
+                "created_at": _iso(hit.created_at),
+            })
+    results.sort(key=lambda hit: hit["created_at"] or "", reverse=True)
+    return results[:50]
+
+
 # ── voice ────────────────────────────────
 @app.post("/stt", dependencies=[Depends(require_api_key)])
 async def stt(file: UploadFile = File(...)):
