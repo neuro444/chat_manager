@@ -159,6 +159,14 @@ def test_prompt_states_delivery_and_json_contract():
     assert "[[END_CALL]]" not in SYSTEM_PROMPT
 
 
+def test_prompt_allows_same_caller_to_request_detailed_order_history():
+    from prompts import SYSTEM_PROMPT
+
+    assert "do NOT refuse a request for \"my past orders\"" in SYSTEM_PROMPT
+    assert "date or time, order name, items, quantities, total, order type" in SYSTEM_PROMPT
+    assert "DETAILED HISTORY FOR THE SAME CALLER" in SYSTEM_PROMPT
+
+
 def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):
     from providers.fake_provider import FakeProvider
     from service import handle_message
