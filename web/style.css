@@ -45,8 +45,14 @@ body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,s
          border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:12px}
 .llm-debug{flex:0 0 auto;margin-bottom:10px;border:1px solid var(--line);
            border-radius:8px;background:var(--accent-soft);overflow:hidden}
-.llm-debug>summary{cursor:pointer;padding:7px 10px;font-size:11px;font-weight:700;
-                   color:var(--muted);user-select:none}
+.llm-debug>summary{cursor:pointer;padding:9px 12px;font-size:12px;font-weight:700;
+                   color:#fff;background:var(--accent);user-select:none;
+                   text-align:center;list-style:none}
+.llm-debug>summary::-webkit-details-marker{display:none}
+.llm-debug>summary:hover{filter:brightness(1.12)}
+.debug-collapse-label{display:none}
+.llm-debug[open] .debug-expand-label{display:none}
+.llm-debug[open] .debug-collapse-label{display:inline}
 .llm-debug-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 8px 8px}
 .llm-debug-grid section{min-width:0}
 .llm-debug-grid h3{margin:0 0 4px;font-size:10px;text-transform:uppercase;
