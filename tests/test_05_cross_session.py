@@ -1,5 +1,7 @@
 """Layer 5 — cross-session memory: recall facts from the user's OTHER sessions."""
 import pytest
+import config
+from context.memory import build_memory_context
 from providers.fake_provider import FakeProvider
 from service import build_context, handle_message
 
@@ -19,13 +21,14 @@ def test_recalls_fact_from_previous_session(store):
     assert "chat manager" in blob.lower()
 
 
-def test_no_memory_block_when_nothing_relevant(store):
+def test_recent_prior_call_is_always_available_even_without_keyword_match(store):
     p = FakeProvider()
     handle_message(store, p, "u1", None, "the weather is nice today")
     new_sid = store.create_session("u1").session_id
     msgs = build_context(store, "u1", new_sid, "quantum chromodynamics equations")
     blob = "\n".join(m["content"] for m in msgs)
-    assert "weather" not in blob.lower()
+    assert "weather" in blob.lower()
+    assert "previous call" in blob.lower()
 
 
 def test_current_session_excluded_from_memory(store):
@@ -73,3 +76,24 @@ def test_past_order_recalled_from_vague_followup(store):
     blob = "\n".join(m["content"] for m in
                      build_context(store, "+9110", new_sid, "what did I get last time?"))
     assert "samosa" in blob.lower()
+
+
+def test_prior_calls_include_dates_and_both_sides_of_name_exchange(store):
+    sid = store.create_session("+1444").session_id
+    store.append_message(sid, "assistant", "What name should I place the order under?")
+    store.append_message(sid, "user", "Sri Krishna")
+    current = store.create_session("+1444").session_id
+    blob = "\n".join(m["content"] for m in
+                     build_context(store, "+1444", current, "one Chilli Paneer"))
+    assert "Previous call — 20" in blob
+    assert "assistant: What name should I place the order under?" in blob
+    assert "caller: Sri Krishna" in blob
+
+
+def test_cross_session_context_is_capped_at_configured_message_window(store):
+    sid = store.create_session("+1555").session_id
+    for index in range(config.CROSS_SESSION_MESSAGE_WINDOW + 10):
+        store.append_message(sid, "user", f"past-message-{index}")
+    current = store.create_session("+1555").session_id
+    memory = build_memory_context(store, "+1555", "new order", current)
+    assert memory.count("past-message-") == config.CROSS_SESSION_MESSAGE_WINDOW
