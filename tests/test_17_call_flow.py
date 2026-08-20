@@ -181,6 +181,10 @@ def test_cake_and_catering_callback_is_a_multi_turn_conversation():
     assert "help them organize their thoughts" in SYSTEM_PROMPT
     assert "Do not disconnect or trigger the" in SYSTEM_PROMPT
     assert "Never claim that a specific" in SYSTEM_PROMPT
+    assert "Never treat the caller's first description" in SYSTEM_PROMPT
+    assert "answer that question before doing anything else" in SYSTEM_PROMPT
+    assert "caller must explicitly indicate they are finished" in SYSTEM_PROMPT
+    assert "requirements include a question; continue instead of handing off" in SYSTEM_PROMPT
 
 
 def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):
