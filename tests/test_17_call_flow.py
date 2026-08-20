@@ -143,6 +143,8 @@ def test_prompt_states_delivery_and_json_contract():
     assert "order_ready" in SYSTEM_PROMPT
     assert "tools_called" in SYSTEM_PROMPT
     assert "Transfer_to_Manager" in SYSTEM_PROMPT
+    assert '"call_ended":true,"order_ready":true' in SYSTEM_PROMPT
+    assert "yes, that is all, pickup in twenty minutes" in SYSTEM_PROMPT.lower()
     assert "[[END_CALL]]" not in SYSTEM_PROMPT
 
 
