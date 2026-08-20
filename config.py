@@ -41,6 +41,9 @@ MONGO_DB = os.getenv("MONGO_DB", "chat_manager")
 MAX_CONTEXT_TOKENS = _int("MAX_CONTEXT_TOKENS", 8000)
 RESERVED_FOR_REPLY = _int("RESERVED_FOR_REPLY", 1500)
 CHARS_PER_TOKEN = 4
+# Encoding used when the model name is not one tiktoken knows. o200k_base is
+# the current GPT-4o/5 family encoding.
+TIKTOKEN_ENCODING = os.getenv("TIKTOKEN_ENCODING", "o200k_base")
 HISTORY_WINDOW = _int("HISTORY_WINDOW", 20)
 SUMMARY_TRIGGER_EVERY = _int("SUMMARY_TRIGGER_EVERY", 10)
 CROSS_SESSION_WINDOW = _int("CROSS_SESSION_WINDOW", 5)

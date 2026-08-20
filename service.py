@@ -8,6 +8,7 @@ from time import perf_counter
 import json
 
 import config
+import tokens
 from context.assembler import assemble
 from context.caller import capture_name
 from context.callflow import parse_model_response
@@ -146,7 +147,7 @@ def _finish_turn(
     repo, provider, session_id, user_message, answer, is_first_turn,
     llm_latency_ms, order_ready=False, order=None, to_manager=False,
     tools_called=False, summary="", verbatim_user_chat=None,
-    response_fields=None,
+    response_fields=None, token_usage=None,
 ):
     """Shared epilogue: persist the reply, then post-turn work."""
     repo.append_message(
@@ -156,6 +157,7 @@ def _finish_turn(
         metadata={
             "model": config.LLM_MODEL,
             "llm_latency_ms": llm_latency_ms,
+            "token_usage": token_usage or {},
             "order_ready": order_ready,
             "order": order,
             "To_manager": to_manager,
@@ -174,6 +176,10 @@ _PUBLIC_CORE_FIELDS = {
     "answer", "session_id", "call_ended", "order_ready", "order",
     "To_manager", "tools_called", "summary", "verbatim_user_chat",
     "end_delay_seconds",
+    # Token accounting, added by the service rather than the prompt — listed
+    # so a model that echoes these names cannot overwrite the measured values.
+    "model_used", "input_tokens", "output_tokens", "total_tokens",
+    "token_source", "estimated_input_tokens", "estimated_output_tokens",
 }
 
 
@@ -251,13 +257,21 @@ def handle_message(
     session_id, is_first, messages = _start_turn(
         repo, user_id, session_id, user_message, new_session=new_session
     )
-    print(f"[llm_call_start] session_id={session_id}", flush=True)
+    input_tokens = tokens.count_messages(messages)
+    print(f"[llm_call_start] session_id={session_id} "
+          f"model={config.LLM_MODEL} input_tokens={input_tokens}", flush=True)
     llm_started = perf_counter()
     raw = _complete(provider, messages)
     llm_latency_ms = round((perf_counter() - llm_started) * 1000, 2)
+    token_usage = tokens.report(messages, raw, provider, config.LLM_MODEL)
     _debug(f"[llm_raw_response] session_id={session_id} response={raw!r}")
     print(
         f"[llm_call_complete] session_id={session_id} "
+        f"model={token_usage['model_used']} "
+        f"input_tokens={token_usage['input_tokens']} "
+        f"output_tokens={token_usage['output_tokens']} "
+        f"total_tokens={token_usage['total_tokens']} "
+        f"token_source={token_usage['token_source']} "
         f"response_time_ms={llm_latency_ms} "
         f"response_time_seconds={llm_latency_ms / 1000:.2f}",
         flush=True,
@@ -277,7 +291,7 @@ def handle_message(
         repo, provider, session_id, user_message, answer, is_first,
         llm_latency_ms, order_ready, order, to_manager, parsed["tools_called"],
         parsed["summary"], parsed["verbatim_user_chat"],
-        extensions,
+        extensions, token_usage,
     )
     if ended:
         repo.mark_session_ended(session_id)
@@ -293,6 +307,7 @@ def handle_message(
         "summary": parsed["summary"],
         "verbatim_user_chat": parsed["verbatim_user_chat"],
         "end_delay_seconds": config.CALL_END_DELAY_SECONDS if ended else 0,
+        **token_usage,
     }
     if include_llm_debug:
         result["llm_debug"] = _llm_debug_payload(messages, raw)
@@ -310,19 +325,29 @@ def stream_message(repo, provider, user_id, session_id, user_message):
         repo, user_id, session_id, user_message
     )
     chunks = []
-    print(f"[llm_call_start] session_id={session_id} stream=true", flush=True)
+    input_tokens = tokens.count_messages(messages)
+    print(f"[llm_call_start] session_id={session_id} stream=true "
+          f"model={config.LLM_MODEL} input_tokens={input_tokens}", flush=True)
     llm_started = perf_counter()
     for delta in provider.stream(messages):
         chunks.append(delta)
         yield delta
     llm_latency_ms = round((perf_counter() - llm_started) * 1000, 2)
+    raw = "".join(chunks)
+    # Streaming responses carry no usage object, so this is always the local
+    # tiktoken count.
+    token_usage = tokens.report(messages, raw, provider, config.LLM_MODEL)
     print(
         f"[llm_call_complete] session_id={session_id} stream=true "
+        f"model={token_usage['model_used']} "
+        f"input_tokens={token_usage['input_tokens']} "
+        f"output_tokens={token_usage['output_tokens']} "
+        f"total_tokens={token_usage['total_tokens']} "
+        f"token_source={token_usage['token_source']} "
         f"response_time_ms={llm_latency_ms} "
         f"response_time_seconds={llm_latency_ms / 1000:.2f}",
         flush=True,
     )
-    raw = "".join(chunks)
     _debug(f"[llm_raw_response] session_id={session_id} response={raw!r}")
     parsed = parse_model_response(raw)
     parsed["tools_called"] = bool(
@@ -339,7 +364,7 @@ def stream_message(repo, provider, user_id, session_id, user_message):
         repo, provider, session_id, user_message, answer, is_first,
         llm_latency_ms, order_ready, order, to_manager, parsed["tools_called"],
         parsed["summary"], parsed["verbatim_user_chat"],
-        extensions,
+        extensions, token_usage,
     )
     if ended:
         repo.mark_session_ended(session_id)
@@ -355,4 +380,5 @@ def stream_message(repo, provider, user_id, session_id, user_message):
         "summary": parsed["summary"],
         "verbatim_user_chat": parsed["verbatim_user_chat"],
         "end_delay_seconds": config.CALL_END_DELAY_SECONDS if ended else 0,
+        **token_usage,
     }
