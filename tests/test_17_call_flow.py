@@ -10,6 +10,7 @@ def _raw(answer, **flags):
         "call_ended": False,
         "order_ready": False,
         "order": None,
+        "order_type": None,
         "To_manager": False,
         "Transfer_to_Manager": False,
         "tools_called": False,
@@ -43,7 +44,7 @@ def test_order_flags_are_returned_and_persisted(repo):
     from service import handle_message
 
     raw = _raw("Order confirmed. CakeWorld Alpharetta.", call_ended=True,
-               order_ready=True, tools_called=True)
+               order_ready=True, order_type="pickup", tools_called=True)
     priced = {"name": "price_order", "result": {
         "items": [{"name": "Veg Biriyani", "price": 13.99,
                    "quantity": 3, "line_total": 41.97}],
@@ -53,6 +54,7 @@ def test_order_flags_are_returned_and_persisted(repo):
                          "pickup")
     assistant = repo.all_messages(out["session_id"])[-1]
     assert out["order_ready"] is True
+    assert out["order_type"] == "pickup"
     assert out["order"]["items"][0]["unit_price"] == "13.99"
     assert out["order"]["total"] == "45.22"
     assert out["To_manager"] is False
@@ -60,6 +62,7 @@ def test_order_flags_are_returned_and_persisted(repo):
     assert assistant.metadata["order_ready"] is True
     assert assistant.metadata["order"] == out["order"]
     assert assistant.metadata["tools_called"] is True
+    assert assistant.metadata["response_fields"]["order_type"] == "pickup"
 
 
 def test_manager_flag_is_returned_and_persisted(repo):
@@ -67,14 +70,22 @@ def test_manager_flag_is_returned_and_persisted(repo):
     from service import handle_message
 
     raw = _raw("Our manager will contact you.", call_ended=True,
-               To_manager=True, summary="Office catering",
+               To_manager=True, order_type="catering", summary="Office catering",
                verbatim_user_chat=["I need catering"])
     out = handle_message(repo, FakeProvider(raw), "+9177", None, "catering")
     assistant = repo.all_messages(out["session_id"])[-1]
     assert out["order_ready"] is False
     assert out["To_manager"] is True
     assert out["summary"] == "Office catering"
+    assert out["order_type"] == "catering"
     assert assistant.metadata["To_manager"] is True
+    assert assistant.metadata["response_fields"]["order_type"] == "catering"
+
+
+def test_order_type_is_normalized_and_invalid_values_are_rejected():
+    assert parse_model_response(_raw("Callback.", order_type="cake_and_catering"))["order_type"] == "cake/catering"
+    assert parse_model_response(_raw("Delivery.", request_type="delivery"))["order_type"] == "delivery"
+    assert parse_model_response(_raw("Unknown.", order_type="dine-in"))["order_type"] is None
 
 
 def test_direct_manager_transfer_is_returned_and_persisted(repo):

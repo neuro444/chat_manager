@@ -39,6 +39,9 @@ const fmtTime = (iso) => {
   return isNaN(d) ? "" : d.toLocaleString([], {
     month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 };
+const icon = (name) => name === "trash"
+  ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 15H6L5 6m4 4v7m6-7v7"/></svg>'
+  : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>';
 
 async function api(path, opts) {
   const r = await fetch(path, opts);
@@ -67,7 +70,8 @@ async function loadCallers() {
     const del = document.createElement("button");
     del.className = "delete-btn";
     del.title = "Delete caller and every session";
-    del.textContent = "Delete";
+    del.setAttribute("aria-label", del.title);
+    del.innerHTML = icon("trash");
     del.onclick = () => deleteCaller(c.user_id);
     wrap.append(el, del);
     box.appendChild(wrap);
@@ -128,7 +132,8 @@ async function loadSessions(previews = {}) {
     const del = document.createElement("button");
     del.className = "delete-btn";
     del.title = "Delete this session";
-    del.textContent = "Delete";
+    del.setAttribute("aria-label", del.title);
+    del.innerHTML = icon("trash");
     del.onclick = () => deleteSession(s.session_id);
     wrap.append(el, del);
     box.appendChild(wrap);
@@ -177,11 +182,19 @@ function bubble(role, text, ts) {
   d.appendChild(content);
   const copy = document.createElement("button");
   copy.className = "copy-btn";
-  copy.textContent = "Copy";
+  copy.title = "Copy message";
+  copy.setAttribute("aria-label", copy.title);
+  copy.innerHTML = icon("copy");
   copy.onclick = async () => {
     await navigator.clipboard.writeText(text);
-    copy.textContent = "Copied";
-    setTimeout(() => { copy.textContent = "Copy"; }, 1200);
+    copy.classList.add("copied");
+    copy.title = "Copied";
+    copy.setAttribute("aria-label", copy.title);
+    setTimeout(() => {
+      copy.classList.remove("copied");
+      copy.title = "Copy message";
+      copy.setAttribute("aria-label", copy.title);
+    }, 1200);
   };
   d.appendChild(copy);
   if (ts) { const s = document.createElement("span");

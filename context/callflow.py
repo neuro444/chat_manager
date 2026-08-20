@@ -2,6 +2,9 @@
 import json
 
 
+_ORDER_TYPES = {"pickup", "cake", "catering", "cake/catering", "delivery"}
+
+
 def parse_model_response(raw: str | dict) -> dict:
     """Normalize an LLM response into the public chat-result contract."""
     if isinstance(raw, dict):
@@ -25,6 +28,14 @@ def parse_model_response(raw: str | dict) -> dict:
     # control fields are still normalized below instead of trusting truthy
     # strings or malformed values from the model.
     result = dict(data)
+    raw_order_type = str(
+        data.get("order_type") or data.get("request_type") or ""
+    ).strip().lower()
+    # Accept the legacy prompt spelling, but expose one canonical value.
+    if raw_order_type == "cake_and_catering":
+        raw_order_type = "cake/catering"
+    if data.get("order_ready") is True:
+        raw_order_type = "pickup"
     result.update({
         "answer": str(data.get("answer") or "").strip(),
         "call_ended": data.get("call_ended") is True,
@@ -33,6 +44,7 @@ def parse_model_response(raw: str | dict) -> dict:
         "To_manager": data.get("To_manager") is True,
         "Transfer_to_Manager": data.get("Transfer_to_Manager") is True,
         "tools_called": data.get("tools_called") is True,
+        "order_type": raw_order_type if raw_order_type in _ORDER_TYPES else None,
         "summary": str(data.get("summary") or "").strip(),
         "verbatim_user_chat": (
             data.get("verbatim_user_chat")
