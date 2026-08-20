@@ -75,14 +75,20 @@ def _is_expired(session) -> bool:
     return age > timedelta(minutes=config.SESSION_TIMEOUT_MINUTES)
 
 
-def resolve_session(repo, user_id: str, session_id: str | None) -> str:
+def resolve_session(
+    repo, user_id: str, session_id: str | None, new_session: bool = False
+) -> str:
     """Reuse the caller's live session, or open a new one.
 
     A new phone call must not land inside the previous call's transcript, so a
     session that has been idle past SESSION_TIMEOUT_MINUTES is left closed.
     """
-    if session_id and repo.get_session(session_id) is not None:
-        return session_id
+    if new_session:
+        return repo.create_session(user_id).session_id
+    if session_id:
+        requested = repo.get_session(session_id)
+        if requested is not None and requested.user_id == user_id:
+            return session_id
     if session_id is None:
         recent = repo.list_sessions(user_id, 1)
         if (recent and not _is_expired(recent[0])
@@ -91,10 +97,10 @@ def resolve_session(repo, user_id: str, session_id: str | None) -> str:
     return repo.create_session(user_id).session_id
 
 
-def _start_turn(repo, user_id, session_id, user_message):
+def _start_turn(repo, user_id, session_id, user_message, new_session=False):
     """Shared prologue: resolve session, persist the user turn, build context."""
     repo.ensure_user(user_id)
-    session_id = resolve_session(repo, user_id, session_id)
+    session_id = resolve_session(repo, user_id, session_id, new_session=new_session)
     is_first_turn = repo.message_count(session_id) == 0
     capture_name(repo, user_id, user_message)
 
@@ -255,11 +261,12 @@ def _build_ready_order(repo, provider, user_id: str, requested: bool):
 
 
 def handle_message(
-    repo, provider, user_id, session_id, user_message, include_llm_debug=False
+    repo, provider, user_id, session_id, user_message, include_llm_debug=False,
+    new_session=False,
 ):
     """Run one full turn and return {"answer", "session_id"}."""
     session_id, is_first, messages = _start_turn(
-        repo, user_id, session_id, user_message
+        repo, user_id, session_id, user_message, new_session=new_session
     )
     print(f"[llm_call_start] session_id={session_id}", flush=True)
     llm_started = perf_counter()

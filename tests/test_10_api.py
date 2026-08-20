@@ -53,6 +53,31 @@ def test_chat_continues_session(client):
     assert [m["content"] for m in msgs][:3] == ["first", "api reply", "second"]
 
 
+def test_chat_can_force_a_new_session_for_same_caller(client):
+    first = client.post("/chat", json={"user_id": "u1", "message": "first"}).json()
+    second = client.post("/chat", json={
+        "user_id": "u1",
+        "message": "new call",
+        "new_session": True,
+    }).json()
+    assert second["session_id"] != first["session_id"]
+    assert len(client.get("/sessions", params={"user_id": "u1"}).json()) == 2
+
+
+def test_chat_rejects_cross_caller_session_reuse(client):
+    alice = client.post("/chat", json={"user_id": "alice", "message": "private"}).json()
+    bob = client.post("/chat", json={
+        "user_id": "bob",
+        "session_id": alice["session_id"],
+        "message": "hello",
+    }).json()
+    assert bob["session_id"] != alice["session_id"]
+    alice_messages = client.get(
+        f"/sessions/{alice['session_id']}/messages"
+    ).json()
+    assert [message["content"] for message in alice_messages] == ["private", "api reply"]
+
+
 def test_empty_message_rejected(client):
     assert client.post("/chat", json={"user_id": "u1", "message": "  "}).status_code == 400
 

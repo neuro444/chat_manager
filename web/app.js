@@ -1,6 +1,6 @@
 // Staff dashboard. Callers are phone numbers; there is no login.
 const $ = (id) => document.getElementById(id);
-const state = { caller: null, session: null, sessions: [] };
+const state = { caller: null, session: null, sessions: [], forceNewSession: false };
 const debugFields = [
   "latest-query", "chat-history", "session-summary", "caller-profile",
   "cross-session-memory", "reference-data", "system-prompt", "combined-input",
@@ -63,6 +63,7 @@ async function loadCallers() {
 async function selectCaller(userId) {
   state.caller = userId;
   state.session = null;
+  state.forceNewSession = false;
   $("active-caller").textContent = userId;
   await loadCallers();
   await loadSessions();
@@ -143,10 +144,26 @@ $("input").addEventListener("keydown", (e) => {
 
 $("new-chat").onclick = () => {
   state.session = null;
+  state.forceNewSession = true;
   $("messages").innerHTML = '<div class="empty">New call — type or speak to start.</div>';
   $("summary").classList.add("hidden");
   clearLlmDebug();
   loadSessions();
+  $("input").focus();
+};
+
+$("change-caller").onclick = async () => {
+  const caller = prompt("Caller phone number:", "+15555550100");
+  if (!caller?.trim()) return;
+  state.caller = caller.trim();
+  state.session = null;
+  state.forceNewSession = true;
+  $("active-caller").textContent = state.caller;
+  $("messages").innerHTML = '<div class="empty">New caller — type or speak to start.</div>';
+  $("summary").classList.add("hidden");
+  clearLlmDebug();
+  await loadCallers();
+  await loadSessions();
   $("input").focus();
 };
 
@@ -169,9 +186,11 @@ $("composer").onsubmit = async (e) => {
         session_id: state.session,
         message: text,
         include_llm_debug: true,
+        new_session: state.forceNewSession,
       }),
     });
     state.session = out.session_id;
+    state.forceNewSession = false;
     $("messages").appendChild(bubble("assistant", out.answer, new Date().toISOString()));
     $("messages").scrollTop = $("messages").scrollHeight;
     showLlmDebug(out.llm_debug);

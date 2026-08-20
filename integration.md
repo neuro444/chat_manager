@@ -18,7 +18,8 @@ itself currently performs no authentication.
 ## Conversation lifecycle
 
 1. Choose a stable `user_id` for the customer.
-2. Send the first message to `POST /chat` with `session_id: null`.
+2. Send the first message of a new call to `POST /chat` with
+   `session_id: null` and `new_session: true`.
 3. Save the returned `session_id`.
 4. Send that `session_id` with every later message in the conversation.
 5. Display or speak only the returned `answer`.
@@ -70,6 +71,7 @@ Request:
 {
   "user_id": "customer-123",
   "session_id": null,
+  "new_session": true,
   "message": "I would like two samosas"
 }
 ```
@@ -80,6 +82,7 @@ Request:
 |---|---|---:|---|
 | `user_id` | string | No | Stable customer identity; defaults to `default` |
 | `session_id` | string or null | No | `null` initially; reuse the returned ID afterward |
+| `new_session` | boolean | No | Set `true` only on the first turn of a distinct phone call; prevents recent-session reuse |
 | `message` | string | Yes | Current finalized user utterance or text message |
 
 Blank messages return HTTP `400`.
@@ -310,6 +313,7 @@ API.
 
 ```javascript
 let sessionId = null;
+let isNewCall = true;
 
 async function sendTurn(userId, message) {
   const response = await fetch("https://api.example.com/chat", {
@@ -318,6 +322,7 @@ async function sendTurn(userId, message) {
     body: JSON.stringify({
       user_id: userId,
       session_id: sessionId,
+      new_session: isNewCall,
       message
     })
   });
@@ -326,6 +331,7 @@ async function sendTurn(userId, message) {
 
   const result = await response.json();
   sessionId = result.session_id;
+  isNewCall = false;
 
   displayOrSpeak(result.answer);
 
