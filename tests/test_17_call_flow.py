@@ -167,6 +167,18 @@ def test_prompt_allows_same_caller_to_request_detailed_order_history():
     assert "DETAILED HISTORY FOR THE SAME CALLER" in SYSTEM_PROMPT
 
 
+def test_cake_and_catering_callback_is_a_multi_turn_conversation():
+    from prompts import SYSTEM_PROMPT
+
+    assert "Cake orders are handled by my manager" in SYSTEM_PROMPT
+    assert "Catering orders are handled by my manager" in SYSTEM_PROMPT
+    assert "Could I ask the manager to call you back?" in SYSTEM_PROMPT
+    assert "Could you please describe your requirements?" in SYSTEM_PROMPT
+    assert "do not combine its two questions" in SYSTEM_PROMPT
+    assert "do not take cake orders" not in SYSTEM_PROMPT
+    assert "do not take catering orders" not in SYSTEM_PROMPT
+
+
 def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):
     from providers.fake_provider import FakeProvider
     from service import handle_message
