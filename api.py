@@ -58,6 +58,7 @@ class ChatIn(BaseModel):
     user_id: str = "default"          # the caller's phone number
     session_id: str | None = None
     message: str
+    include_llm_debug: bool = False
 
 
 @app.get("/health")
@@ -70,7 +71,8 @@ def chat(body: ChatIn):
     if not body.message.strip():
         raise HTTPException(400, "message cannot be empty")
     return handle_message(get_repo(), get_provider(),
-                          _caller(body.user_id), body.session_id, body.message)
+                          _caller(body.user_id), body.session_id, body.message,
+                          include_llm_debug=body.include_llm_debug)
 
 
 @app.get("/callers")

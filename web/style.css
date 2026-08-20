@@ -43,6 +43,19 @@ body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,s
 .bubble .ts{display:block;font-size:10px;opacity:.7;margin-top:4px}
 .summary{background:var(--accent-soft);border-left:3px solid var(--accent);
          border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:12px}
+.llm-debug{flex:0 0 auto;margin-bottom:10px;border:1px solid var(--line);
+           border-radius:8px;background:var(--accent-soft);overflow:hidden}
+.llm-debug>summary{cursor:pointer;padding:7px 10px;font-size:11px;font-weight:700;
+                   color:var(--muted);user-select:none}
+.llm-debug-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 8px 8px}
+.llm-debug-grid section{min-width:0}
+.llm-debug-grid h3{margin:0 0 4px;font-size:10px;text-transform:uppercase;
+                   letter-spacing:.05em;color:var(--muted)}
+.llm-debug-grid pre{height:150px;margin:0;padding:8px;overflow:auto;border:1px solid var(--line);
+                    border-radius:6px;background:var(--panel);color:var(--ink);
+                    font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;
+                    white-space:pre-wrap;word-break:break-word}
+.llm-output-pane{grid-column:1/-1}
 .hidden{display:none}
 .empty{color:var(--muted);text-align:center;margin-top:40px}
 .composer{display:flex;gap:8px;margin-top:10px}
@@ -52,7 +65,8 @@ body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,s
                  background:var(--accent);color:#fff;cursor:pointer;font-weight:600}
 .mic{background:var(--accent-soft)!important;color:var(--ink)!important}
 .mic.recording{background:#d33!important;color:#fff!important}
-@media(max-width:900px){.grid{grid-template-columns:1fr;height:auto}}
+@media(max-width:900px){.grid{grid-template-columns:1fr;height:auto}
+  .llm-debug-grid{grid-template-columns:1fr}}
 
 .newbtn{width:100%;margin-bottom:8px;padding:8px;border:1px dashed var(--accent);
         border-radius:8px;background:transparent;color:var(--accent);

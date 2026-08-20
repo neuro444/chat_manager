@@ -1,8 +1,35 @@
 // Staff dashboard. Callers are phone numbers; there is no login.
 const $ = (id) => document.getElementById(id);
 const state = { caller: null, session: null, sessions: [] };
+const debugFields = [
+  "latest-query", "chat-history", "session-summary", "caller-profile",
+  "cross-session-memory", "reference-data", "system-prompt", "combined-input",
+  "output",
+];
 
 const setStatus = (t) => { $("status").textContent = t; };
+const clearLlmDebug = () => {
+  $("llm-debug").classList.add("hidden");
+  debugFields.forEach((field) => { $(`debug-${field}`).textContent = ""; });
+};
+const showLlmDebug = (debug) => {
+  if (!debug) return clearLlmDebug();
+  const show = (field, value) => {
+    $(`debug-${field}`).textContent = typeof value === "string"
+      ? (value || "— none —")
+      : JSON.stringify(value, null, 2);
+  };
+  show("latest-query", debug.latest_query);
+  show("chat-history", debug.chat_history);
+  show("session-summary", debug.session_summary);
+  show("caller-profile", debug.caller_profile);
+  show("cross-session-memory", debug.cross_session_memory);
+  show("reference-data", debug.reference_data);
+  show("system-prompt", debug.system_prompt);
+  show("combined-input", debug.combined_input);
+  show("output", debug.output);
+  $("llm-debug").classList.remove("hidden");
+};
 const fmtTime = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -41,6 +68,7 @@ async function selectCaller(userId) {
   await loadSessions();
   $("messages").innerHTML = '<div class="empty">Select a call.</div>';
   $("summary").classList.add("hidden");
+  clearLlmDebug();
 }
 
 // ── sessions ─────────────────────────────
@@ -117,6 +145,7 @@ $("new-chat").onclick = () => {
   state.session = null;
   $("messages").innerHTML = '<div class="empty">New call — type or speak to start.</div>';
   $("summary").classList.add("hidden");
+  clearLlmDebug();
   loadSessions();
   $("input").focus();
 };
@@ -135,11 +164,17 @@ $("composer").onsubmit = async (e) => {
   try {
     const out = await api("/chat", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: caller, session_id: state.session, message: text }),
+      body: JSON.stringify({
+        user_id: caller,
+        session_id: state.session,
+        message: text,
+        include_llm_debug: true,
+      }),
     });
     state.session = out.session_id;
     $("messages").appendChild(bubble("assistant", out.answer, new Date().toISOString()));
     $("messages").scrollTop = $("messages").scrollHeight;
+    showLlmDebug(out.llm_debug);
     setStatus("ready");
     if ($("tts-toggle").checked) speak(out.answer);
     await loadCallers(); await loadSessions();

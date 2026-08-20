@@ -30,6 +30,20 @@
 
   <section class="pane chat">
     <div id="summary" class="summary hidden"></div>
+    <details id="llm-debug" class="llm-debug hidden" open>
+      <summary>LLM Debug — context, combined input, and raw output</summary>
+      <div class="llm-debug-grid">
+        <section><h3>Latest query</h3><pre id="debug-latest-query"></pre></section>
+        <section><h3>Chat history</h3><pre id="debug-chat-history"></pre></section>
+        <section><h3>Session summary</h3><pre id="debug-session-summary"></pre></section>
+        <section><h3>Caller profile</h3><pre id="debug-caller-profile"></pre></section>
+        <section><h3>Cross-session memory</h3><pre id="debug-cross-session-memory"></pre></section>
+        <section><h3>Reference data / menu</h3><pre id="debug-reference-data"></pre></section>
+        <section><h3>System prompt</h3><pre id="debug-system-prompt"></pre></section>
+        <section><h3>Combined LLM input</h3><pre id="debug-combined-input"></pre></section>
+        <section class="llm-output-pane"><h3>Raw LLM output</h3><pre id="debug-output"></pre></section>
+      </div>
+    </details>
     <div id="messages" class="messages">
       <div class="empty">Select a caller to view their conversation.</div>
     </div>

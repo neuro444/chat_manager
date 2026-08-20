@@ -28,6 +28,22 @@ def test_chat_returns_reply_and_session(client):
     assert r.status_code == 200
     assert r.json()["answer"] == "api reply"
     assert r.json()["session_id"]
+    assert "llm_debug" not in r.json()
+
+
+def test_chat_can_return_llm_debug_for_dashboard(client):
+    r = client.post("/chat", json={
+        "user_id": "u1",
+        "message": "hello",
+        "include_llm_debug": True,
+    })
+    assert r.status_code == 200
+    debug = r.json()["llm_debug"]
+    assert debug["output"] == "api reply"
+    assert debug["latest_query"] == "hello"
+    assert debug["combined_input"][-1] == {"role": "user", "content": "hello"}
+    assert "Reference data" not in debug["reference_data"]
+    assert debug["system_prompt"]
 
 
 def test_chat_continues_session(client):

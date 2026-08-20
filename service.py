@@ -117,6 +117,42 @@ def _complete(provider, messages):
         return provider.complete(messages)      # providers without tool support
 
 
+def _llm_debug_payload(messages, raw):
+    """Split the exact assembled request into dashboard-friendly sections."""
+    system_messages = [m for m in messages if m.get("role") == "system"]
+    context_text = system_messages[1]["content"] if len(system_messages) > 1 else ""
+    context_blocks = {}
+    for block in context_text.split("\n\n## "):
+        if block.startswith("## "):
+            block = block[3:]
+        if "\n" not in block:
+            continue
+        label, content = block.split("\n", 1)
+        if label in {
+            "About the user",
+            "Relevant past conversations",
+            "Earlier in this conversation",
+            "Reference data",
+        }:
+            context_blocks[label] = content
+
+    history = [
+        message for message in messages[1:-1]
+        if message.get("role") != "system"
+    ]
+    return {
+        "latest_query": messages[-1].get("content", "") if messages else "",
+        "chat_history": history,
+        "session_summary": context_blocks.get("Earlier in this conversation", ""),
+        "caller_profile": context_blocks.get("About the user", ""),
+        "cross_session_memory": context_blocks.get("Relevant past conversations", ""),
+        "reference_data": context_blocks.get("Reference data", ""),
+        "system_prompt": system_messages[0].get("content", "") if system_messages else "",
+        "combined_input": messages,
+        "output": raw,
+    }
+
+
 def _finish_turn(
     repo, provider, session_id, user_message, answer, is_first_turn,
     llm_latency_ms, order_ready=False, order=None, to_manager=False,
@@ -218,7 +254,9 @@ def _build_ready_order(repo, provider, user_id: str, requested: bool):
     }
 
 
-def handle_message(repo, provider, user_id, session_id, user_message):
+def handle_message(
+    repo, provider, user_id, session_id, user_message, include_llm_debug=False
+):
     """Run one full turn and return {"answer", "session_id"}."""
     session_id, is_first, messages = _start_turn(
         repo, user_id, session_id, user_message
@@ -266,6 +304,8 @@ def handle_message(repo, provider, user_id, session_id, user_message):
         "verbatim_user_chat": parsed["verbatim_user_chat"],
         "end_delay_seconds": config.CALL_END_DELAY_SECONDS if ended else 0,
     }
+    if include_llm_debug:
+        result["llm_debug"] = _llm_debug_payload(messages, raw)
     _debug(f"[chat_result] {json.dumps(result, ensure_ascii=False)}")
     return result
 
