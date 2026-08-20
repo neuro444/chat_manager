@@ -15,6 +15,18 @@ const clearLlmDebug = () => {
   $("llm-debug").classList.add("hidden");
   debugFields.forEach((field) => { $(`debug-${field}`).textContent = ""; });
 };
+const formatRawLlmOutput = (value) => {
+  if (typeof value !== "string") return JSON.stringify(value, null, 2);
+  if (!value) return "— none —";
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object"
+      ? JSON.stringify(parsed, null, 2)
+      : value;
+  } catch {
+    return value;
+  }
+};
 const showLlmDebug = (debug) => {
   if (!debug) return clearLlmDebug();
   const show = (field, value) => {
@@ -30,7 +42,7 @@ const showLlmDebug = (debug) => {
   show("reference-data", debug.reference_data);
   show("system-prompt", debug.system_prompt);
   show("combined-input", debug.combined_input);
-  show("output", debug.output);
+  $("debug-output").textContent = formatRawLlmOutput(debug.output);
   $("llm-debug").classList.remove("hidden");
 };
 const fmtTime = (iso) => {
