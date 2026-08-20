@@ -4,7 +4,6 @@ The CLI and the HTTP API both call handle_message() and nothing else. If
 anything outside this module needs to import from context/ or storage/, a
 boundary has leaked.
 """
-from datetime import datetime, timedelta, timezone
 from time import perf_counter
 import json
 
@@ -64,24 +63,13 @@ def build_context(repo, user_id: str, session_id: str, user_message: str) -> lis
     )
 
 
-def _is_expired(session) -> bool:
-    """A call that has been silent past the timeout is over."""
-    updated = session.updated_at
-    if isinstance(updated, str):
-        updated = datetime.fromisoformat(updated)
-    if updated.tzinfo is None:
-        updated = updated.replace(tzinfo=timezone.utc)
-    age = datetime.now(timezone.utc) - updated
-    return age > timedelta(minutes=config.SESSION_TIMEOUT_MINUTES)
-
-
 def resolve_session(
     repo, user_id: str, session_id: str | None, new_session: bool = False
 ) -> str:
-    """Reuse the caller's live session, or open a new one.
+    """Continue an owned session ID, otherwise always create a new session.
 
-    A new phone call must not land inside the previous call's transcript, so a
-    session that has been idle past SESSION_TIMEOUT_MINUTES is left closed.
+    This boundary is client-independent: a missing, unknown, or cross-caller
+    session ID can never attach a turn to an existing conversation.
     """
     if new_session:
         return repo.create_session(user_id).session_id
@@ -89,11 +77,6 @@ def resolve_session(
         requested = repo.get_session(session_id)
         if requested is not None and requested.user_id == user_id:
             return session_id
-    if session_id is None:
-        recent = repo.list_sessions(user_id, 1)
-        if (recent and not _is_expired(recent[0])
-                and not recent[0].metadata.get("ended")):
-            return recent[0].session_id
     return repo.create_session(user_id).session_id
 
 

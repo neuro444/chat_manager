@@ -71,9 +71,9 @@ def test_switching_back_resumes_history(store):
     assert "in session A" in contents and "back in A" in contents
 
 
-def test_new_call_within_timeout_resumes(store):
-    """Passing session_id=None resumes a live call rather than opening a new one."""
+def test_missing_session_id_always_starts_new_call(store):
+    """Isolation is backend-enforced for every client, including terminal calls."""
     p = FakeProvider()
     first = handle_message(store, p, "+919999999999", None, "one dosa")["session_id"]
     again = handle_message(store, p, "+919999999999", None, "and a chai")["session_id"]
-    assert again == first
+    assert again != first
