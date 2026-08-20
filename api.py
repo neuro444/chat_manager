@@ -4,9 +4,10 @@ Identity model: there is no login. `user_id` IS the caller's phone number,
 supplied by the voice channel (browser mic today, telephony webhook later).
 Staff read the dashboard; callers never see a screen.
 """
+import hmac
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
@@ -17,6 +18,19 @@ from storage import make_repo
 
 app = FastAPI(title="Chat Manager — Phone Ordering")
 WEB = Path(__file__).parent / "web"
+
+
+def require_api_key(x_api_key: str = Header(default="", alias="X-API-Key")):
+    """Guard every route that exposes caller data or costs money to call.
+
+    A no-op when config.API_KEY is unset, so local dev and the test suite run
+    unchanged. Once set, the telephony gateway must send the same value. /health
+    stays open so Docker's healthcheck and the gateway's readiness probe work.
+    """
+    if not config.API_KEY:
+        return
+    if not hmac.compare_digest(x_api_key, config.API_KEY):
+        raise HTTPException(401, "invalid or missing API key")
 
 _repo = None
 _provider = None
@@ -67,7 +81,7 @@ def health():
     return {"status": "ok", "storage": config.STORAGE, "model": config.LLM_MODEL}
 
 
-@app.post("/chat")
+@app.post("/chat", dependencies=[Depends(require_api_key)])
 def chat(body: ChatIn):
     if not body.message.strip():
         raise HTTPException(400, "message cannot be empty")
@@ -77,7 +91,7 @@ def chat(body: ChatIn):
                           new_session=body.new_session)
 
 
-@app.get("/callers")
+@app.get("/callers", dependencies=[Depends(require_api_key)])
 def callers():
     """Distinct phone numbers with activity counts — the dashboard's left rail."""
     repo = get_repo()
@@ -89,14 +103,14 @@ def callers():
     return out
 
 
-@app.delete("/callers")
+@app.delete("/callers", dependencies=[Depends(require_api_key)])
 def delete_caller(user_id: str):
     user_id = _caller(user_id)
     get_repo().delete_user(user_id)
     return {"deleted": user_id}
 
 
-@app.get("/sessions")
+@app.get("/sessions", dependencies=[Depends(require_api_key)])
 def sessions(user_id: str = "default"):
     repo = get_repo()
     user_id = _caller(user_id)
@@ -112,7 +126,7 @@ def sessions(user_id: str = "default"):
     ]
 
 
-@app.get("/sessions/{session_id}/messages")
+@app.get("/sessions/{session_id}/messages", dependencies=[Depends(require_api_key)])
 def messages(session_id: str):
     return [
         {"seq": m.seq, "role": m.role, "content": m.content,
@@ -121,13 +135,13 @@ def messages(session_id: str):
     ]
 
 
-@app.delete("/sessions/{session_id}")
+@app.delete("/sessions/{session_id}", dependencies=[Depends(require_api_key)])
 def delete(session_id: str):
     get_repo().delete_session(session_id)
     return {"deleted": session_id}
 
 
-@app.get("/search")
+@app.get("/search", dependencies=[Depends(require_api_key)])
 def search(user_id: str, q: str):
     """Search a caller's past conversations; returns a preview per hit."""
     hits = get_repo().search_messages(_caller(user_id), q, "", 20)
@@ -139,7 +153,7 @@ def search(user_id: str, q: str):
 
 
 # ── voice ────────────────────────────────
-@app.post("/stt")
+@app.post("/stt", dependencies=[Depends(require_api_key)])
 async def stt(file: UploadFile = File(...)):
     """Speech to text via OpenAI. Used by the browser mic."""
     import tempfile, os
@@ -157,7 +171,7 @@ class TTSIn(BaseModel):
     text: str
 
 
-@app.post("/tts")
+@app.post("/tts", dependencies=[Depends(require_api_key)])
 def tts(body: TTSIn):
     """Text to speech via ElevenLabs. Returns mp3 bytes."""
     from voice.tts import synthesize

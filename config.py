@@ -77,3 +77,10 @@ ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_v3")
 # ── Server ────────────────────────────
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = _int("PORT", 8000)
+
+# ── API auth ──────────────────────────
+# Shared secret the telephony gateway sends on every request. When empty,
+# auth is disabled entirely so local development and the test suite are
+# unaffected; set it in production, where the API is reachable over the network.
+API_KEY = os.getenv("API_KEY", "")
+API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
