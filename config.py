@@ -38,7 +38,7 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "chat_manager")
 
 # ── Context budget ────────────────────
-MAX_CONTEXT_TOKENS = _int("MAX_CONTEXT_TOKENS", 8000)
+MAX_CONTEXT_TOKENS = _int("MAX_CONTEXT_TOKENS", 32000)
 RESERVED_FOR_REPLY = _int("RESERVED_FOR_REPLY", 1500)
 CHARS_PER_TOKEN = 4
 # Encoding used when the model name is not one tiktoken knows. o200k_base is
