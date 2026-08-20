@@ -191,3 +191,116 @@ def test_usage_is_persisted_with_the_message(client):
     msgs = api._repo.all_messages(data["session_id"])
     meta = [m for m in msgs if m.role == "assistant"][-1].metadata
     assert meta["token_usage"]["input_tokens"] == data["input_tokens"]
+
+
+# ── latency and TTS characters ────────────────────────────────────────────
+
+def test_latency_is_reported_per_turn(client):
+    """Not a cost signal — it exists to flag unusually slow turns."""
+    data = client.post("/chat", json={"user_id": "+15551234567",
+                                      "message": "two samosas"}).json()
+    assert "latency_ms" in data
+    assert isinstance(data["latency_ms"], (int, float))
+    assert data["latency_ms"] >= 0
+
+
+def test_tts_chars_counts_only_the_spoken_answer(client):
+    """The JSON envelope and flags are never sent to TTS — counting the raw
+    model output would overstate the ElevenLabs bill substantially."""
+    data = client.post("/chat", json={"user_id": "+15551234567",
+                                      "message": "two samosas"}).json()
+    assert data["tts_chars"] == len(data["answer"])
+
+
+def test_per_turn_lists_accumulate_across_the_call(client):
+    """latency_ms_per_turn is [t1, t2, t3] after three turns."""
+    uid = "+15551234567"
+    session_id = None
+    for message in ["two samosas", "and a gobi manchurian", "that's all"]:
+        body = {"user_id": uid, "message": message}
+        if session_id:
+            body["session_id"] = session_id
+        data = client.post("/chat", json=body).json()
+        session_id = data["session_id"]
+
+    assert len(data["latency_ms_per_turn"]) == 3
+    assert len(data["tts_chars_per_turn"]) == 3
+    # The last entry is this turn.
+    assert data["tts_chars_per_turn"][-1] == data["tts_chars"]
+    assert data["latency_ms_per_turn"][-1] == data["latency_ms"]
+
+
+def test_lists_cover_every_turn_not_a_window(client):
+    """All turns in the session, unbounded — deliberately NOT capped by
+    HISTORY_WINDOW, which limits the prompt context, not this telemetry."""
+    uid = "+15551234567"
+    session_id = None
+    turns = config.HISTORY_WINDOW + 5   # comfortably past the context window
+    for i in range(turns):
+        body = {"user_id": uid, "message": f"item number {i}"}
+        if session_id:
+            body["session_id"] = session_id
+        data = client.post("/chat", json=body).json()
+        session_id = data["session_id"]
+
+    assert len(data["latency_ms_per_turn"]) == turns
+    assert len(data["tts_chars_per_turn"]) == turns
+    assert data["total_chars_tts"] == sum(data["tts_chars_per_turn"])
+
+
+def test_total_chars_tts_is_the_sum_of_the_call(client):
+    uid = "+15551234567"
+    session_id = None
+    for message in ["two samosas", "and a gobi manchurian"]:
+        body = {"user_id": uid, "message": message}
+        if session_id:
+            body["session_id"] = session_id
+        data = client.post("/chat", json=body).json()
+        session_id = data["session_id"]
+
+    assert data["total_chars_tts"] == sum(data["tts_chars_per_turn"])
+    assert data["total_chars_tts"] > data["tts_chars"]  # more than this turn
+
+
+def test_first_turn_has_a_single_entry(client):
+    data = client.post("/chat", json={"user_id": "+15551234567",
+                                      "message": "hi"}).json()
+    assert data["tts_chars_per_turn"] == [data["tts_chars"]]
+
+
+def test_separate_calls_do_not_share_telemetry(client):
+    """A new session starts its lists over — these are per-call, not per-caller."""
+    uid = "+15551234567"
+    first = client.post("/chat", json={"user_id": uid, "message": "two samosas"}).json()
+    client.post("/chat", json={"user_id": uid, "session_id": first["session_id"],
+                               "message": "and a chai"}).json()
+    fresh = client.post("/chat", json={"user_id": uid, "message": "hello again",
+                                       "new_session": True}).json()
+    assert len(fresh["tts_chars_per_turn"]) == 1
+
+
+def test_telemetry_survives_an_unreadable_history(monkeypatch):
+    """Telemetry must never break a live call."""
+    class BrokenRepo:
+        def all_messages(self, session_id):
+            raise RuntimeError("db gone")
+
+    got = tokens.session_history(BrokenRepo(), "s1")
+    assert got == {"latency_ms_per_turn": [], "tts_chars_per_turn": []}
+
+
+def test_tts_chars_handles_an_empty_answer():
+    assert tokens.count_tts_chars("") == 0
+    assert tokens.count_tts_chars(None) == 0
+
+
+def test_latency_fields_cannot_be_overridden_by_the_model():
+    import service
+
+    parsed = {"answer": "hi", "call_ended": False, "order_ready": False,
+              "To_manager": False, "tools_called": False, "summary": "",
+              "verbatim_user_chat": [], "latency_ms": 0.001,
+              "total_chars_tts": 1, "latency_ms_per_turn": []}
+    ext = service._response_extensions(parsed)
+    for field in ("latency_ms", "total_chars_tts", "latency_ms_per_turn"):
+        assert field not in ext

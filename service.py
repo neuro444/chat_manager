@@ -147,7 +147,7 @@ def _finish_turn(
     repo, provider, session_id, user_message, answer, is_first_turn,
     llm_latency_ms, order_ready=False, order=None, to_manager=False,
     tools_called=False, summary="", verbatim_user_chat=None,
-    response_fields=None, token_usage=None,
+    response_fields=None, token_usage=None, tts_chars=0,
 ):
     """Shared epilogue: persist the reply, then post-turn work."""
     repo.append_message(
@@ -158,6 +158,8 @@ def _finish_turn(
             "model": config.LLM_MODEL,
             "llm_latency_ms": llm_latency_ms,
             "token_usage": token_usage or {},
+            # Only `answer` is spoken, so this is what ElevenLabs bills for.
+            "tts_chars": tts_chars,
             "order_ready": order_ready,
             "order": order,
             "To_manager": to_manager,
@@ -180,6 +182,8 @@ _PUBLIC_CORE_FIELDS = {
     # so a model that echoes these names cannot overwrite the measured values.
     "model_used", "input_tokens", "output_tokens", "total_tokens",
     "token_source", "estimated_input_tokens", "estimated_output_tokens",
+    "latency_ms", "tts_chars", "total_chars_tts",
+    "latency_ms_per_turn", "tts_chars_per_turn",
 }
 
 
@@ -287,14 +291,17 @@ def handle_message(
     to_manager = parsed["To_manager"]
     extensions = _response_extensions(parsed)
     answer = parsed["answer"]
+    tts_chars = tokens.count_tts_chars(answer)
     _finish_turn(
         repo, provider, session_id, user_message, answer, is_first,
         llm_latency_ms, order_ready, order, to_manager, parsed["tools_called"],
         parsed["summary"], parsed["verbatim_user_chat"],
-        extensions, token_usage,
+        extensions, token_usage, tts_chars,
     )
     if ended:
         repo.mark_session_ended(session_id)
+    # Read back AFTER _finish_turn so this turn is included in the lists.
+    call_telemetry = tokens.session_history(repo, session_id)
     result = {
         **extensions,
         "answer": answer,
@@ -308,6 +315,11 @@ def handle_message(
         "verbatim_user_chat": parsed["verbatim_user_chat"],
         "end_delay_seconds": config.CALL_END_DELAY_SECONDS if ended else 0,
         **token_usage,
+        # Latency is not a cost signal — it is here to flag unusually slow turns.
+        "latency_ms": llm_latency_ms,
+        "tts_chars": tts_chars,
+        "total_chars_tts": sum(call_telemetry["tts_chars_per_turn"]),
+        **call_telemetry,
     }
     if include_llm_debug:
         result["llm_debug"] = _llm_debug_payload(messages, raw)
@@ -360,14 +372,16 @@ def stream_message(repo, provider, user_id, session_id, user_message):
     to_manager = parsed["To_manager"]
     extensions = _response_extensions(parsed)
     answer = parsed["answer"]
+    tts_chars = tokens.count_tts_chars(answer)
     _finish_turn(
         repo, provider, session_id, user_message, answer, is_first,
         llm_latency_ms, order_ready, order, to_manager, parsed["tools_called"],
         parsed["summary"], parsed["verbatim_user_chat"],
-        extensions, token_usage,
+        extensions, token_usage, tts_chars,
     )
     if ended:
         repo.mark_session_ended(session_id)
+    call_telemetry = tokens.session_history(repo, session_id)
     return {
         **extensions,
         "answer": answer,
@@ -381,4 +395,8 @@ def stream_message(repo, provider, user_id, session_id, user_message):
         "verbatim_user_chat": parsed["verbatim_user_chat"],
         "end_delay_seconds": config.CALL_END_DELAY_SECONDS if ended else 0,
         **token_usage,
+        "latency_ms": llm_latency_ms,
+        "tts_chars": tts_chars,
+        "total_chars_tts": sum(call_telemetry["tts_chars_per_turn"]),
+        **call_telemetry,
     }

@@ -104,6 +104,43 @@ def usage_from_response(response) -> dict | None:
     }
 
 
+def session_history(repo, session_id: str) -> dict:
+    """Per-turn latency and TTS characters for every turn so far this call.
+
+    Read back from the assistant messages already persisted, so the lists
+    survive a restart and cost nothing extra to maintain. Index 0 is the
+    first turn of the call.
+    """
+    latencies: list[float] = []
+    tts_chars: list[int] = []
+    try:
+        messages = repo.all_messages(session_id)
+    except Exception:  # never let telemetry break a live call
+        logger.warning("could not read session history for %s", session_id,
+                       exc_info=True)
+        return {"latency_ms_per_turn": [], "tts_chars_per_turn": []}
+
+    for message in messages:
+        if message.role != "assistant":
+            continue
+        meta = message.metadata or {}
+        latency = meta.get("llm_latency_ms")
+        if latency is not None:
+            latencies.append(latency)
+        tts_chars.append(meta.get("tts_chars", 0))
+    return {"latency_ms_per_turn": latencies, "tts_chars_per_turn": tts_chars}
+
+
+def count_tts_chars(answer: str) -> int:
+    """Characters ElevenLabs is billed for on this turn.
+
+    Only `answer` is ever spoken — the JSON envelope, flags, and summary are
+    never sent to TTS, so counting the raw model output would overstate the
+    bill substantially.
+    """
+    return len(answer or "")
+
+
 def report(messages, raw, provider, model: str) -> dict:
     """Build the token block that goes on the /chat response.
 
