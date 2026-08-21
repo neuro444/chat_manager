@@ -10,6 +10,7 @@ def _raw(answer, **flags):
         "call_ended": False,
         "order_ready": False,
         "order": None,
+        "order_type": None,
         "To_manager": False,
         "Transfer_to_Manager": False,
         "tools_called": False,
@@ -43,7 +44,7 @@ def test_order_flags_are_returned_and_persisted(repo):
     from service import handle_message
 
     raw = _raw("Order confirmed. CakeWorld Alpharetta.", call_ended=True,
-               order_ready=True, tools_called=True)
+               order_ready=True, order_type="pickup", tools_called=True)
     priced = {"name": "price_order", "result": {
         "items": [{"name": "Veg Biriyani", "price": 13.99,
                    "quantity": 3, "line_total": 41.97}],
@@ -53,6 +54,7 @@ def test_order_flags_are_returned_and_persisted(repo):
                          "pickup")
     assistant = repo.all_messages(out["session_id"])[-1]
     assert out["order_ready"] is True
+    assert out["order_type"] == "pickup"
     assert out["order"]["items"][0]["unit_price"] == "13.99"
     assert out["order"]["total"] == "45.22"
     assert out["To_manager"] is False
@@ -60,6 +62,46 @@ def test_order_flags_are_returned_and_persisted(repo):
     assert assistant.metadata["order_ready"] is True
     assert assistant.metadata["order"] == out["order"]
     assert assistant.metadata["tools_called"] is True
+    assert assistant.metadata["response_fields"]["order_type"] == "pickup"
+
+
+def test_current_call_name_reaches_verified_order_without_profile_write(repo):
+    from providers.fake_provider import FakeProvider
+    from service import handle_message
+
+    raw = _raw(
+        "Maya, your order is confirmed.", call_ended=True,
+        order_ready=True, order_type="pickup", tools_called=True,
+        name="Maya", order={"customer_name": "Maya"},
+    )
+    priced = {"name": "price_order", "result": {
+        "items": [{"name": "Chilli Paneer", "price": 11.99,
+                   "quantity": 1, "line_total": 11.99}],
+        "unknown": [], "subtotal": 11.99, "tax": 0.93, "total": 12.92,
+    }}
+    out = handle_message(
+        repo, FakeProvider(raw, [priced]), "+9199", None, "Maya"
+    )
+    assert out["name"] == "Maya"
+    assert out["order"]["customer_name"] == "Maya"
+    assert repo.get_user("+9199").name == ""  # shared phones stay unmodified
+
+
+def test_verified_order_uses_no_name_sentinel_when_name_is_unavailable(repo):
+    from providers.fake_provider import FakeProvider
+    from service import handle_message
+
+    raw = _raw(
+        "Your order is confirmed.", call_ended=True, order_ready=True,
+        order_type="pickup", tools_called=True, name="no_name_given",
+    )
+    priced = {"name": "price_order", "result": {
+        "items": [{"name": "Samosa", "price": 2, "quantity": 1,
+                   "line_total": 2}],
+        "unknown": [], "subtotal": 2, "tax": 0.16, "total": 2.16,
+    }}
+    out = handle_message(repo, FakeProvider(raw, [priced]), "+9100", None, "no")
+    assert out["order"]["customer_name"] == "no_name_given"
 
 
 def test_manager_flag_is_returned_and_persisted(repo):
@@ -67,14 +109,22 @@ def test_manager_flag_is_returned_and_persisted(repo):
     from service import handle_message
 
     raw = _raw("Our manager will contact you.", call_ended=True,
-               To_manager=True, summary="Office catering",
+               To_manager=True, order_type="catering", summary="Office catering",
                verbatim_user_chat=["I need catering"])
     out = handle_message(repo, FakeProvider(raw), "+9177", None, "catering")
     assistant = repo.all_messages(out["session_id"])[-1]
     assert out["order_ready"] is False
     assert out["To_manager"] is True
     assert out["summary"] == "Office catering"
+    assert out["order_type"] == "catering"
     assert assistant.metadata["To_manager"] is True
+    assert assistant.metadata["response_fields"]["order_type"] == "catering"
+
+
+def test_order_type_is_normalized_and_invalid_values_are_rejected():
+    assert parse_model_response(_raw("Callback.", order_type="cake_and_catering"))["order_type"] == "cake/catering"
+    assert parse_model_response(_raw("Delivery.", request_type="delivery"))["order_type"] == "delivery"
+    assert parse_model_response(_raw("Unknown.", order_type="dine-in"))["order_type"] is None
 
 
 def test_direct_manager_transfer_is_returned_and_persisted(repo):
@@ -146,6 +196,40 @@ def test_prompt_states_delivery_and_json_contract():
     assert '"call_ended":true,"order_ready":true' in SYSTEM_PROMPT
     assert "yes, that is all, pickup in twenty minutes" in SYSTEM_PROMPT.lower()
     assert "[[END_CALL]]" not in SYSTEM_PROMPT
+
+
+def test_prompt_allows_same_caller_to_request_detailed_order_history():
+    from prompts import SYSTEM_PROMPT
+
+    assert "do NOT refuse a request for \"my past orders\"" in SYSTEM_PROMPT
+    assert "date or time, order name, items, quantities, total, order type" in SYSTEM_PROMPT
+    assert "DETAILED HISTORY FOR THE SAME CALLER" in SYSTEM_PROMPT
+
+
+def test_cake_and_catering_callback_is_a_multi_turn_conversation():
+    from prompts import SYSTEM_PROMPT
+
+    assert "Cake orders are handled by my manager" in SYSTEM_PROMPT
+    assert "Catering orders are handled by my manager" in SYSTEM_PROMPT
+    assert "If you share the details with me" in SYSTEM_PROMPT
+    assert "May I have the order details, please?" in SYSTEM_PROMPT
+    assert "your requirements?" in SYSTEM_PROMPT
+    assert "EVERY cake, catering, or combined inquiry" in SYSTEM_PROMPT
+    assert "do not take cake orders" not in SYSTEM_PROMPT
+    assert "do not take catering orders" not in SYSTEM_PROMPT
+    assert "discussion for as many turns as needed" in SYSTEM_PROMPT
+    assert "help them organize their thoughts" in SYSTEM_PROMPT
+    assert "Do not disconnect or trigger the" in SYSTEM_PROMPT
+    assert "Never claim that a specific" in SYSTEM_PROMPT
+    assert "Never treat the caller's first description" in SYSTEM_PROMPT
+    assert "answer that question before doing anything else" in SYSTEM_PROMPT
+    assert "caller must explicitly indicate they are finished" in SYSTEM_PROMPT
+    assert "requirements include a question; continue instead of handing off" in SYSTEM_PROMPT
+    assert "What name should I include" in SYSTEM_PROMPT
+    assert "do not rely solely on an older name" in SYSTEM_PROMPT
+    assert "Aim for one or two useful" in SYSTEM_PROMPT
+    assert "Do not repeat the same missing-detail question" in SYSTEM_PROMPT
+    assert "unclear speech does not become an interrogation" in SYSTEM_PROMPT
 
 
 def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):

@@ -53,6 +53,16 @@ def test_delete_session_removes_messages(store):
     assert store.all_messages(sid) == []
 
 
+def test_delete_user_removes_profile_sessions_and_messages(store):
+    first = handle_message(store, FakeProvider(), "u1", None, "first")
+    second = handle_message(store, FakeProvider(), "u1", None, "second")
+    store.delete_user("u1")
+    assert store.get_user("u1") is None
+    assert store.list_sessions("u1") == []
+    assert store.all_messages(first["session_id"]) == []
+    assert store.all_messages(second["session_id"]) == []
+
+
 def test_clear_session_keeps_session_drops_messages(store):
     sid = handle_message(store, FakeProvider(), "u1", None, "hi")["session_id"]
     store.update_summary(sid, "old summary", 2)
@@ -71,9 +81,9 @@ def test_switching_back_resumes_history(store):
     assert "in session A" in contents and "back in A" in contents
 
 
-def test_new_call_within_timeout_resumes(store):
-    """Passing session_id=None resumes a live call rather than opening a new one."""
+def test_missing_session_id_always_starts_new_call(store):
+    """Isolation is backend-enforced for every client, including terminal calls."""
     p = FakeProvider()
     first = handle_message(store, p, "+919999999999", None, "one dosa")["session_id"]
     again = handle_message(store, p, "+919999999999", None, "and a chai")["session_id"]
-    assert again == first
+    assert again != first

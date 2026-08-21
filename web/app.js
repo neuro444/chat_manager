@@ -1,6 +1,9 @@
 // Staff dashboard. Callers are phone numbers; there is no login.
 const $ = (id) => document.getElementById(id);
-const state = { caller: null, session: null, sessions: [] };
+const state = {
+  caller: null, session: null, sessions: [], forceNewSession: false,
+  callerFilter: "",
+};
 const debugFields = [
   "latest-query", "chat-history", "session-summary", "caller-profile",
   "cross-session-memory", "reference-data", "system-prompt", "combined-input",
@@ -11,6 +14,18 @@ const setStatus = (t) => { $("status").textContent = t; };
 const clearLlmDebug = () => {
   $("llm-debug").classList.add("hidden");
   debugFields.forEach((field) => { $(`debug-${field}`).textContent = ""; });
+};
+const formatRawLlmOutput = (value) => {
+  if (typeof value !== "string") return JSON.stringify(value, null, 2);
+  if (!value) return "— none —";
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object"
+      ? JSON.stringify(parsed, null, 2)
+      : value;
+  } catch {
+    return value;
+  }
 };
 const showLlmDebug = (debug) => {
   if (!debug) return clearLlmDebug();
@@ -27,7 +42,7 @@ const showLlmDebug = (debug) => {
   show("reference-data", debug.reference_data);
   show("system-prompt", debug.system_prompt);
   show("combined-input", debug.combined_input);
-  show("output", debug.output);
+  $("debug-output").textContent = formatRawLlmOutput(debug.output);
   $("llm-debug").classList.remove("hidden");
 };
 const fmtTime = (iso) => {
@@ -35,6 +50,14 @@ const fmtTime = (iso) => {
   const d = new Date(iso);
   return isNaN(d) ? "" : d.toLocaleString([], {
     month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+const icon = (name) => name === "trash"
+  ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 15H6L5 6m4 4v7m6-7v7"/></svg>'
+  : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>';
+
+const showSessionId = (sessionId) => {
+  $("active-session-id").textContent = sessionId || "";
+  $("chat-meta").classList.toggle("hidden", !sessionId);
 };
 
 async function api(path, opts) {
@@ -45,29 +68,100 @@ async function api(path, opts) {
 
 // ── callers ──────────────────────────────
 async function loadCallers() {
-  const rows = await api("/callers");
+  const allRows = await api("/callers");
+  const query = state.callerFilter.toLowerCase();
+  const rows = allRows.filter((c) =>
+    `${c.name || ""} ${c.user_id}`.toLowerCase().includes(query));
   const box = $("callers");
   box.innerHTML = "";
-  if (!rows.length) { box.innerHTML = '<div class="empty">No calls yet.</div>'; return; }
+  if (!rows.length) { box.innerHTML = '<div class="empty">No matching callers.</div>'; return; }
   rows.forEach((c) => {
+    const wrap = document.createElement("div");
+    wrap.className = "row-wrap";
     const el = document.createElement("button");
     el.className = "row" + (c.user_id === state.caller ? " active" : "");
     const label = c.name ? `${c.name} · ${c.user_id}` : c.user_id;
     el.innerHTML = `<div class="title">${label}</div>
       <div class="meta">${c.session_count} call(s) · ${c.message_count} msgs<br>${fmtTime(c.last_active)}</div>`;
     el.onclick = () => selectCaller(c.user_id);
-    box.appendChild(el);
+    const del = document.createElement("button");
+    del.className = "delete-btn";
+    del.title = "Delete caller and every session";
+    del.setAttribute("aria-label", del.title);
+    del.innerHTML = icon("trash");
+    del.onclick = () => deleteCaller(c.user_id);
+    wrap.append(el, del);
+    box.appendChild(wrap);
   });
+}
+
+$("caller-search").oninput = (event) => {
+  state.callerFilter = event.target.value.trim();
+  loadCallers();
+};
+
+let globalSearchTimer;
+$("global-search").oninput = (event) => {
+  clearTimeout(globalSearchTimer);
+  const query = event.target.value.trim();
+  globalSearchTimer = setTimeout(async () => {
+    if (!query) return loadCallers();
+    const hits = await api(`/staff/search?q=${encodeURIComponent(query)}`);
+    const box = $("callers");
+    box.innerHTML = "";
+    if (!hits.length) {
+      box.innerHTML = '<div class="empty">No conversation matches.</div>';
+      return;
+    }
+    hits.forEach((hit) => {
+      const button = document.createElement("button");
+      button.className = "row global-result";
+      const title = document.createElement("div");
+      title.className = "title";
+      title.textContent = hit.user_id;
+      const preview = document.createElement("div");
+      preview.className = "preview";
+      preview.textContent = hit.preview;
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = fmtTime(hit.created_at);
+      button.append(title, preview, meta);
+      button.onclick = async () => {
+        await selectCaller(hit.user_id);
+        await openSession(hit.session_id);
+      };
+      box.appendChild(button);
+    });
+  }, 250);
+};
+
+async function deleteCaller(userId) {
+  if (!confirm(`Delete ${userId} and ALL of this caller's sessions and messages?`)) return;
+  await api(`/callers?user_id=${encodeURIComponent(userId)}`, { method: "DELETE" });
+  if (state.caller === userId) {
+    state.caller = null;
+    state.session = null;
+    state.sessions = [];
+    state.forceNewSession = false;
+    $("active-caller").textContent = "";
+    $("sessions").innerHTML = "";
+    $("messages").innerHTML = '<div class="empty">Select a caller.</div>';
+    $("summary").classList.add("hidden");
+    clearLlmDebug();
+  }
+  await loadCallers();
 }
 
 async function selectCaller(userId) {
   state.caller = userId;
   state.session = null;
+  state.forceNewSession = false;
   $("active-caller").textContent = userId;
   await loadCallers();
   await loadSessions();
   $("messages").innerHTML = '<div class="empty">Select a call.</div>';
   $("summary").classList.add("hidden");
+  showSessionId(null);
   clearLlmDebug();
 }
 
@@ -79,6 +173,8 @@ async function loadSessions(previews = {}) {
   box.innerHTML = "";
   if (!state.sessions.length) { box.innerHTML = '<div class="empty">No calls.</div>'; return; }
   state.sessions.forEach((s) => {
+    const wrap = document.createElement("div");
+    wrap.className = "row-wrap";
     const el = document.createElement("button");
     el.className = "row" + (s.session_id === state.session ? " active" : "");
     const preview = previews[s.session_id]
@@ -86,15 +182,39 @@ async function loadSessions(previews = {}) {
     el.innerHTML = `<div class="title">${s.title.slice(0, 60)}</div>${preview}
       <div class="meta">${fmtTime(s.updated_at)} · ${s.message_count} messages</div>`;
     el.onclick = () => openSession(s.session_id);
-    box.appendChild(el);
+    const del = document.createElement("button");
+    del.className = "delete-btn";
+    del.title = "Delete this session";
+    del.setAttribute("aria-label", del.title);
+    del.innerHTML = icon("trash");
+    del.onclick = () => deleteSession(s.session_id);
+    wrap.append(el, del);
+    box.appendChild(wrap);
   });
+}
+
+async function deleteSession(sessionId) {
+  if (!confirm("Delete this session and all of its messages?")) return;
+  await api(`/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+  if (state.session === sessionId) {
+    state.session = null;
+    showSessionId(null);
+    $("messages").innerHTML = '<div class="empty">Session deleted.</div>';
+    $("summary").classList.add("hidden");
+    clearLlmDebug();
+  }
+  await loadSessions();
+  await loadCallers();
 }
 
 async function openSession(sid) {
   state.session = sid;
+  showSessionId(sid);
   await loadSessions();
   const msgs = await api(`/sessions/${sid}/messages`);
   renderMessages(msgs);
+  const debug = await api(`/sessions/${sid}/debug`);
+  showLlmDebug(debug);
   const s = state.sessions.find((x) => x.session_id === sid);
   const sum = $("summary");
   if (s?.running_summary) {
@@ -114,7 +234,26 @@ function renderMessages(msgs) {
 function bubble(role, text, ts) {
   const d = document.createElement("div");
   d.className = `bubble ${role}`;
-  d.textContent = text;
+  const content = document.createElement("span");
+  content.textContent = text;
+  d.appendChild(content);
+  const copy = document.createElement("button");
+  copy.className = "copy-btn";
+  copy.title = "Copy message";
+  copy.setAttribute("aria-label", copy.title);
+  copy.innerHTML = icon("copy");
+  copy.onclick = async () => {
+    await navigator.clipboard.writeText(text);
+    copy.classList.add("copied");
+    copy.title = "Copied";
+    copy.setAttribute("aria-label", copy.title);
+    setTimeout(() => {
+      copy.classList.remove("copied");
+      copy.title = "Copy message";
+      copy.setAttribute("aria-label", copy.title);
+    }, 1200);
+  };
+  d.appendChild(copy);
   if (ts) { const s = document.createElement("span");
             s.className = "ts"; s.textContent = fmtTime(ts); d.appendChild(s); }
   return d;
@@ -143,10 +282,28 @@ $("input").addEventListener("keydown", (e) => {
 
 $("new-chat").onclick = () => {
   state.session = null;
+  state.forceNewSession = true;
   $("messages").innerHTML = '<div class="empty">New call — type or speak to start.</div>';
   $("summary").classList.add("hidden");
+  showSessionId(null);
   clearLlmDebug();
   loadSessions();
+  $("input").focus();
+};
+
+$("change-caller").onclick = async () => {
+  const caller = prompt("Caller phone number:", "+15555550100");
+  if (!caller?.trim()) return;
+  state.caller = caller.trim();
+  state.session = null;
+  state.forceNewSession = true;
+  $("active-caller").textContent = state.caller;
+  $("messages").innerHTML = '<div class="empty">New caller — type or speak to start.</div>';
+  $("summary").classList.add("hidden");
+  showSessionId(null);
+  clearLlmDebug();
+  await loadCallers();
+  await loadSessions();
   $("input").focus();
 };
 
@@ -169,9 +326,12 @@ $("composer").onsubmit = async (e) => {
         session_id: state.session,
         message: text,
         include_llm_debug: true,
+        new_session: state.forceNewSession,
       }),
     });
     state.session = out.session_id;
+    showSessionId(out.session_id);
+    state.forceNewSession = false;
     $("messages").appendChild(bubble("assistant", out.answer, new Date().toISOString()));
     $("messages").scrollTop = $("messages").scrollHeight;
     showLlmDebug(out.llm_debug);
@@ -179,6 +339,14 @@ $("composer").onsubmit = async (e) => {
     if ($("tts-toggle").checked) speak(out.answer);
     await loadCallers(); await loadSessions();
   } catch (err) { setStatus("error"); alert(err.message); }
+};
+
+$("copy-session-id").innerHTML = icon("copy");
+$("copy-session-id").onclick = async () => {
+  if (!state.session) return;
+  await navigator.clipboard.writeText(state.session);
+  $("copy-session-id").classList.add("copied");
+  setTimeout(() => $("copy-session-id").classList.remove("copied"), 1200);
 };
 
 // ── voice ────────────────────────────────

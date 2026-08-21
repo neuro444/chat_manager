@@ -10,6 +10,8 @@
 <header class="topbar">
   <div class="brand">📞 Phone Orders <span class="sub">staff dashboard</span></div>
   <div class="tools">
+    <input id="caller-search" class="top-search" placeholder="Search callers…">
+    <input id="global-search" class="top-search" placeholder="Search all conversations…">
     <label class="toggle"><input type="checkbox" id="tts-toggle"> 🔊 Speak replies</label>
     <span id="status" class="status">—</span>
   </div>
@@ -23,12 +25,20 @@
 
   <aside class="pane sessions">
     <h2>Calls <span id="active-caller" class="muted"></span></h2>
-    <button id="new-chat" class="newbtn">+ New call</button>
+    <div class="call-actions">
+      <button id="new-chat" class="newbtn">+ New call</button>
+      <button id="change-caller" class="newbtn">Change caller</button>
+    </div>
     <input id="search" class="search" placeholder="Search this caller's calls…">
     <div id="sessions" class="list"></div>
   </aside>
 
   <section class="pane chat">
+    <div id="chat-meta" class="chat-meta hidden">
+      <span class="chat-meta-label">Session</span>
+      <code id="active-session-id"></code>
+      <button id="copy-session-id" class="copy-btn session-copy" title="Copy session ID" aria-label="Copy session ID"></button>
+    </div>
     <div id="summary" class="summary hidden"></div>
     <details id="llm-debug" class="llm-debug hidden">
       <summary>

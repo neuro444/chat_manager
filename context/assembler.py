@@ -47,17 +47,18 @@ def assemble(
 ) -> list[dict]:
     """Build the message array sent to the LLM."""
     history = history or []
-    available = (
-        MAX_CONTEXT_TOKENS
-        - RESERVED_FOR_REPLY
-        - len(SYSTEM_PROMPT) // CHARS_PER_TOKEN
-    )
+    request_budget = MAX_CONTEXT_TOKENS - RESERVED_FOR_REPLY
+    available = request_budget - len(SYSTEM_PROMPT) // CHARS_PER_TOKEN
 
     # The menu is authoritative and must arrive intact when it fits in the
     # variable budget. Reserve it first, then divide the remainder among the
     # optional profile/memory/summary/history layers. This prevents a longer
     # system prompt from silently cutting menu items off alphabetically.
-    domain_text = _trim(domain, available * CHARS_PER_TOKEN)
+    domain_limit = min(
+        available * CHARS_PER_TOKEN,
+        int(request_budget * CONTEXT_BUDGET_WEIGHTS["domain"]) * CHARS_PER_TOKEN,
+    )
+    domain_text = _trim(domain, domain_limit)
     domain_tokens = len(domain_text) // CHARS_PER_TOKEN
     optional_available = max(0, available - domain_tokens)
     optional_keys = ("profile", "memory", "summary", "history")

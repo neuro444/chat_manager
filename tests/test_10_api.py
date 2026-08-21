@@ -44,6 +44,15 @@ def test_chat_can_return_llm_debug_for_dashboard(client):
     assert debug["combined_input"][-1] == {"role": "user", "content": "hello"}
     assert "Reference data" not in debug["reference_data"]
     assert debug["system_prompt"]
+    persisted = client.get(
+        f"/sessions/{r.json()['session_id']}/debug"
+    )
+    assert persisted.status_code == 200
+    assert persisted.json() == debug
+
+
+def test_unknown_session_debug_is_404(client):
+    assert client.get("/sessions/missing/debug").status_code == 404
 
 
 def test_chat_continues_session(client):
@@ -51,6 +60,31 @@ def test_chat_continues_session(client):
     client.post("/chat", json={"user_id": "u1", "session_id": sid, "message": "second"})
     msgs = client.get(f"/sessions/{sid}/messages").json()
     assert [m["content"] for m in msgs][:3] == ["first", "api reply", "second"]
+
+
+def test_chat_can_force_a_new_session_for_same_caller(client):
+    first = client.post("/chat", json={"user_id": "u1", "message": "first"}).json()
+    second = client.post("/chat", json={
+        "user_id": "u1",
+        "message": "new call",
+        "new_session": True,
+    }).json()
+    assert second["session_id"] != first["session_id"]
+    assert len(client.get("/sessions", params={"user_id": "u1"}).json()) == 2
+
+
+def test_chat_rejects_cross_caller_session_reuse(client):
+    alice = client.post("/chat", json={"user_id": "alice", "message": "private"}).json()
+    bob = client.post("/chat", json={
+        "user_id": "bob",
+        "session_id": alice["session_id"],
+        "message": "hello",
+    }).json()
+    assert bob["session_id"] != alice["session_id"]
+    alice_messages = client.get(
+        f"/sessions/{alice['session_id']}/messages"
+    ).json()
+    assert [message["content"] for message in alice_messages] == ["private", "api reply"]
 
 
 def test_empty_message_rejected(client):
@@ -67,3 +101,13 @@ def test_delete_session(client):
     sid = client.post("/chat", json={"user_id": "u1", "message": "hi"}).json()["session_id"]
     client.delete(f"/sessions/{sid}")
     assert client.get(f"/sessions/{sid}/messages").json() == []
+
+
+def test_delete_caller_removes_all_sessions(client):
+    client.post("/chat", json={"user_id": "+15550001", "message": "first"})
+    client.post("/chat", json={"user_id": "+15550001", "message": "second"})
+    assert len(client.get("/sessions", params={"user_id": "+15550001"}).json()) == 2
+    response = client.delete("/callers", params={"user_id": "+15550001"})
+    assert response.status_code == 200
+    assert response.json() == {"deleted": "+15550001"}
+    assert client.get("/sessions", params={"user_id": "+15550001"}).json() == []

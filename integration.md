@@ -18,7 +18,8 @@ itself currently performs no authentication.
 ## Conversation lifecycle
 
 1. Choose a stable `user_id` for the customer.
-2. Send the first message to `POST /chat` with `session_id: null`.
+2. Send the first message of a new call to `POST /chat` with
+   `session_id: null` and `new_session: true`.
 3. Save the returned `session_id`.
 4. Send that `session_id` with every later message in the conversation.
 5. Display or speak only the returned `answer`.
@@ -70,6 +71,7 @@ Request:
 {
   "user_id": "customer-123",
   "session_id": null,
+  "new_session": true,
   "message": "I would like two samosas"
 }
 ```
@@ -79,7 +81,8 @@ Request:
 | Field | Type | Required | Meaning |
 |---|---|---:|---|
 | `user_id` | string | No | Stable customer identity; defaults to `default` |
-| `session_id` | string or null | No | `null` initially; reuse the returned ID afterward |
+| `session_id` | string or null | No | `null` always starts a new isolated session; reuse the returned ID only within that call |
+| `new_session` | boolean | No | Optional explicit new-call signal; also forces a new session even if an ID was supplied |
 | `message` | string | Yes | Current finalized user utterance or text message |
 
 Blank messages return HTTP `400`.
@@ -310,6 +313,7 @@ API.
 
 ```javascript
 let sessionId = null;
+let isNewCall = true;
 
 async function sendTurn(userId, message) {
   const response = await fetch("https://api.example.com/chat", {
@@ -318,6 +322,7 @@ async function sendTurn(userId, message) {
     body: JSON.stringify({
       user_id: userId,
       session_id: sessionId,
+      new_session: isNewCall,
       message
     })
   });
@@ -326,6 +331,7 @@ async function sendTurn(userId, message) {
 
   const result = await response.json();
   sessionId = result.session_id;
+  isNewCall = false;
 
   displayOrSpeak(result.answer);
 
@@ -376,6 +382,10 @@ The current endpoints do not authenticate callers or authorize access to
 `user_id` and `session_id`. Before exposing the API publicly:
 
 - Require authentication at a reverse proxy or application gateway.
+- Derive `user_id` from the trusted telephony provider's verified caller ID;
+  never accept a caller-selected identity as authoritative.
+- Start every phone call with `session_id: null`, then keep the returned
+  `session_id` only in that call's server-side state.
 - Use HTTPS.
 - Restrict staff/history endpoints separately where possible.
 - Rate-limit `/chat`, `/stt`, and `/tts`.

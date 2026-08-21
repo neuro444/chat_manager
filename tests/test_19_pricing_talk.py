@@ -29,6 +29,15 @@ def test_prompt_defaults_pickup_readiness_and_routes_large_orders():
     assert "regular pickup order or catering" in p
 
 
+def test_prompt_contains_business_hours_and_closed_order_timing():
+    p = SYSTEM_PROMPT.lower()
+    assert "sunday through saturday" in p
+    assert "11:00 am to 11:00 pm" in p
+    assert "do not guess the current local time" in p
+    assert "processing when it opens" in p
+    assert "twenty to thirty minutes after preparation starts" in p
+
+
 def test_prompt_requires_unit_prices_in_the_readback():
     assert "unit price" in SYSTEM_PROMPT.lower()
 
