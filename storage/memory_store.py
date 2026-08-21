@@ -144,3 +144,7 @@ class MemoryStore:
     def mark_session_ended(self, session_id):
         if session_id in self.sessions:
             self.sessions[session_id].metadata["ended"] = True
+
+    def set_session_debug(self, session_id, debug):
+        if session_id in self.sessions:
+            self.sessions[session_id].metadata["llm_debug"] = debug

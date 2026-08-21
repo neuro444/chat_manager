@@ -56,6 +56,14 @@ body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,s
           border-radius:6px;background:transparent;color:inherit;opacity:.65;cursor:pointer}
 .copy-btn:hover{background:rgba(127,127,127,.18);opacity:1}
 .copy-btn.copied{color:#27864a;opacity:1}
+.chat-meta{display:flex;align-items:center;gap:7px;flex:0 0 auto;margin-bottom:8px;
+           padding:7px 10px;border:1px solid var(--line);border-radius:8px;
+           background:var(--panel);font-size:11px}
+.chat-meta-label{color:var(--muted);font-weight:700;text-transform:uppercase;
+                 letter-spacing:.05em}
+.chat-meta code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                font:11px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace}
+.session-copy{display:inline-block;flex:0 0 auto;margin:0 0 0 auto}
 .summary{background:var(--accent-soft);border-left:3px solid var(--accent);
          border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:12px}
 .llm-debug{flex:0 0 auto;margin-bottom:10px;border:1px solid var(--line);

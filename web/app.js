@@ -55,6 +55,11 @@ const icon = (name) => name === "trash"
   ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 15H6L5 6m4 4v7m6-7v7"/></svg>'
   : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>';
 
+const showSessionId = (sessionId) => {
+  $("active-session-id").textContent = sessionId || "";
+  $("chat-meta").classList.toggle("hidden", !sessionId);
+};
+
 async function api(path, opts) {
   const r = await fetch(path, opts);
   if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
@@ -156,6 +161,7 @@ async function selectCaller(userId) {
   await loadSessions();
   $("messages").innerHTML = '<div class="empty">Select a call.</div>';
   $("summary").classList.add("hidden");
+  showSessionId(null);
   clearLlmDebug();
 }
 
@@ -192,6 +198,7 @@ async function deleteSession(sessionId) {
   await api(`/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
   if (state.session === sessionId) {
     state.session = null;
+    showSessionId(null);
     $("messages").innerHTML = '<div class="empty">Session deleted.</div>';
     $("summary").classList.add("hidden");
     clearLlmDebug();
@@ -202,9 +209,12 @@ async function deleteSession(sessionId) {
 
 async function openSession(sid) {
   state.session = sid;
+  showSessionId(sid);
   await loadSessions();
   const msgs = await api(`/sessions/${sid}/messages`);
   renderMessages(msgs);
+  const debug = await api(`/sessions/${sid}/debug`);
+  showLlmDebug(debug);
   const s = state.sessions.find((x) => x.session_id === sid);
   const sum = $("summary");
   if (s?.running_summary) {
@@ -275,6 +285,7 @@ $("new-chat").onclick = () => {
   state.forceNewSession = true;
   $("messages").innerHTML = '<div class="empty">New call — type or speak to start.</div>';
   $("summary").classList.add("hidden");
+  showSessionId(null);
   clearLlmDebug();
   loadSessions();
   $("input").focus();
@@ -289,6 +300,7 @@ $("change-caller").onclick = async () => {
   $("active-caller").textContent = state.caller;
   $("messages").innerHTML = '<div class="empty">New caller — type or speak to start.</div>';
   $("summary").classList.add("hidden");
+  showSessionId(null);
   clearLlmDebug();
   await loadCallers();
   await loadSessions();
@@ -318,6 +330,7 @@ $("composer").onsubmit = async (e) => {
       }),
     });
     state.session = out.session_id;
+    showSessionId(out.session_id);
     state.forceNewSession = false;
     $("messages").appendChild(bubble("assistant", out.answer, new Date().toISOString()));
     $("messages").scrollTop = $("messages").scrollHeight;
@@ -326,6 +339,14 @@ $("composer").onsubmit = async (e) => {
     if ($("tts-toggle").checked) speak(out.answer);
     await loadCallers(); await loadSessions();
   } catch (err) { setStatus("error"); alert(err.message); }
+};
+
+$("copy-session-id").innerHTML = icon("copy");
+$("copy-session-id").onclick = async () => {
+  if (!state.session) return;
+  await navigator.clipboard.writeText(state.session);
+  $("copy-session-id").classList.add("copied");
+  setTimeout(() => $("copy-session-id").classList.remove("copied"), 1200);
 };
 
 // ── voice ────────────────────────────────

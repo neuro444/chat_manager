@@ -44,6 +44,15 @@ def test_chat_can_return_llm_debug_for_dashboard(client):
     assert debug["combined_input"][-1] == {"role": "user", "content": "hello"}
     assert "Reference data" not in debug["reference_data"]
     assert debug["system_prompt"]
+    persisted = client.get(
+        f"/sessions/{r.json()['session_id']}/debug"
+    )
+    assert persisted.status_code == 200
+    assert persisted.json() == debug
+
+
+def test_unknown_session_debug_is_404(client):
+    assert client.get("/sessions/missing/debug").status_code == 404
 
 
 def test_chat_continues_session(client):

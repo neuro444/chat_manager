@@ -291,6 +291,7 @@ def handle_message(
     to_manager = parsed["To_manager"]
     extensions = _response_extensions(parsed)
     answer = parsed["answer"]
+    llm_debug = _llm_debug_payload(messages, raw)
     tts_chars = tokens.count_tts_chars(answer)
     _finish_turn(
         repo, provider, session_id, user_message, answer, is_first,
@@ -300,6 +301,9 @@ def handle_message(
     )
     if ended:
         repo.mark_session_ended(session_id)
+    # Keep one current snapshot per session so the staff dashboard can restore
+    # phone and browser calls without duplicating context on every message.
+    repo.set_session_debug(session_id, llm_debug)
     # Read back AFTER _finish_turn so this turn is included in the lists.
     call_telemetry = tokens.session_history(repo, session_id)
     result = {
@@ -322,7 +326,7 @@ def handle_message(
         **call_telemetry,
     }
     if include_llm_debug:
-        result["llm_debug"] = _llm_debug_payload(messages, raw)
+        result["llm_debug"] = llm_debug
     _debug(f"[chat_result] {json.dumps(result, ensure_ascii=False)}")
     return result
 
@@ -372,6 +376,7 @@ def stream_message(repo, provider, user_id, session_id, user_message):
     to_manager = parsed["To_manager"]
     extensions = _response_extensions(parsed)
     answer = parsed["answer"]
+    llm_debug = _llm_debug_payload(messages, raw)
     tts_chars = tokens.count_tts_chars(answer)
     _finish_turn(
         repo, provider, session_id, user_message, answer, is_first,
@@ -381,6 +386,7 @@ def stream_message(repo, provider, user_id, session_id, user_message):
     )
     if ended:
         repo.mark_session_ended(session_id)
+    repo.set_session_debug(session_id, llm_debug)
     call_telemetry = tokens.session_history(repo, session_id)
     return {
         **extensions,

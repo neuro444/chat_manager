@@ -135,6 +135,14 @@ def messages(session_id: str):
     ]
 
 
+@app.get("/sessions/{session_id}/debug", dependencies=[Depends(require_api_key)])
+def session_debug(session_id: str):
+    session = get_repo().get_session(session_id)
+    if session is None:
+        raise HTTPException(404, "session not found")
+    return session.metadata.get("llm_debug")
+
+
 @app.delete("/sessions/{session_id}", dependencies=[Depends(require_api_key)])
 def delete(session_id: str):
     get_repo().delete_session(session_id)

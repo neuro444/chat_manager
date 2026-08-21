@@ -34,6 +34,11 @@
   </aside>
 
   <section class="pane chat">
+    <div id="chat-meta" class="chat-meta hidden">
+      <span class="chat-meta-label">Session</span>
+      <code id="active-session-id"></code>
+      <button id="copy-session-id" class="copy-btn session-copy" title="Copy session ID" aria-label="Copy session ID"></button>
+    </div>
     <div id="summary" class="summary hidden"></div>
     <details id="llm-debug" class="llm-debug hidden">
       <summary>

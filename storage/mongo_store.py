@@ -187,3 +187,8 @@ class MongoStore:
     def mark_session_ended(self, session_id):
         self.db.sessions.update_one({"_id": session_id},
                                     {"$set": {"metadata.ended": True}})
+
+    def set_session_debug(self, session_id, debug):
+        self.db.sessions.update_one(
+            {"_id": session_id}, {"$set": {"metadata.llm_debug": debug}}
+        )

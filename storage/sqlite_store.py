@@ -281,3 +281,13 @@ class SQLiteStore:
         self.conn.execute("UPDATE sessions SET metadata=? WHERE session_id=?",
                           (json.dumps(meta), session_id))
         self.conn.commit()
+
+    def set_session_debug(self, session_id, debug):
+        row = self.conn.execute(
+            "SELECT metadata FROM sessions WHERE session_id=?", (session_id,)
+        ).fetchone()
+        meta = json.loads(row["metadata"] or "{}") if row else {}
+        meta["llm_debug"] = debug
+        self.conn.execute("UPDATE sessions SET metadata=? WHERE session_id=?",
+                          (json.dumps(meta), session_id))
+        self.conn.commit()
