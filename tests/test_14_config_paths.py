@@ -23,8 +23,10 @@ def test_sqlite_path_is_inside_project():
 
 def test_sqlite_path_identical_from_any_cwd():
     """The regression that lost the demo chats."""
+    import tempfile
+
     code = "import sys; sys.path.insert(0, r'%s'); import config; print(config.SQLITE_PATH)" % REPO
-    out = subprocess.run([sys.executable, "-c", code], cwd="/tmp",
+    out = subprocess.run([sys.executable, "-c", code], cwd=tempfile.gettempdir(),
                          capture_output=True, text=True).stdout.strip()
     assert out == config.SQLITE_PATH
 
