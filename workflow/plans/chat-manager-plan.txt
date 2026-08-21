@@ -1,0 +1,94 @@
+Send this to the developer:
+The Chat Manager is a channel-independent HTTP API. For every conversation turn, call POST /chat with JSON containing user_id, session_id, and message.
+On the first turn, send session_id as null. Save the session_id returned by the API and include it in every subsequent turn from the same conversation.
+Request:
+{
+  "user_id": "customer-123",
+  "session_id": null,
+  "message": "I would like two samosas"
+}
+Response:
+{
+  "answer": "Certainly, two samosas. Is that everything for your order?",
+  "session_id": "81068fc8-5d86-4f67-87fe-a75034a2f42d",
+  "call_ended": false,
+  "order_placed": false,
+  "To_manager": false,
+  "tools_called": false,
+  "summary": "",
+  "verbatim_user_chat": [],
+  "end_delay_seconds": 0
+}
+Show or speak only answer. Use call_ended to finish the conversation, order_placed to detect a completed pickup order, and To_manager to create a cake/catering handoff using summary and verbatim_user_chat. If using audio, transcribe it first, send the transcript as message, and convert only answer back to speech. The Chat Manager stores the user name, history, preferences, menu context, and summaries internally; the client should not resend them.
+-------------------------------------------------------------------------------
+# Chat history
+Send this to the developer:
+The Chat Manager is a channel-independent HTTP API that owns the complete conversation layer: users, sessions, message history, user names, rolling summaries, cross-session memory, menu context, LLM calls, pricing tools, and structured result flags.
+For each turn, call POST /chat:
+{
+  "user_id": "customer-123",
+  "session_id": null,
+  "message": "I would like two samosas"
+}
+Use session_id: null on the first turn. Store the returned session_id and send it with every subsequent message in the same conversation.
+The API automatically:
+1. Resolves the user and session.
+2. Saves the user message before calling the LLM.
+3. Retrieves the current session’s recent history.
+4. Loads the rolling summary for longer conversations.
+5. Retrieves relevant information from the user’s previous sessions.
+6. Loads the stored user name and preferences.
+7. Adds the restaurant prompt and menu.
+8. Calls the LLM and any required pricing tool.
+9. Saves the assistant response and control metadata.
+Response:
+{
+  "answer": "Certainly, two samosas. Is that everything for your order?",
+  "session_id": "81068fc8-5d86-4f67-87fe-a75034a2f42d",
+  "call_ended": false,
+  "order_placed": false,
+  "To_manager": false,
+  "tools_called": false,
+  "summary": "",
+  "verbatim_user_chat": [],
+  "end_delay_seconds": 0
+}
+Display or speak only answer. Use the other fields for application logic.
+Dashboard history is available through these endpoints:
+GET /callers
+Returns users with their names, session counts, message counts, and last activity.
+GET /sessions?user_id=customer-123
+Returns that user’s conversations with session IDs, titles, message counts, timestamps, and rolling summaries.
+GET /sessions/{session_id}/messages
+Returns the complete transcript in sequence:
+[
+  {
+    "seq": 1,
+    "role": "user",
+    "content": "I would like two samosas",
+    "created_at": "2026-08-19T15:16:00+00:00"
+  },
+  {
+    "seq": 2,
+    "role": "assistant",
+    "content": "Certainly, two samosas. Is that everything?",
+    "created_at": "2026-08-19T15:16:04+00:00"
+  }
+]
+Search past conversations with:
+GET /search?user_id=customer-123&q=samosa
+Delete a conversation with:
+DELETE /sessions/{session_id}
+Therefore, the external application does not need to maintain its own chat-history engine. It only retains the active user_id and session_id; Chat Manager persists and assembles the rest.
+Important: the current dashboard/history endpoints do not yet have authentication, and transcript reads/deletes do not yet enforce ownership. Keep the API private until the security-plan access controls are implemented.
+-----------------------------------------------------------------------------
+Workflow
+Integrate the phone system only as a transport layer. It must:
+Receive the caller’s audio.
+Convert the audio to text using STT.
+send the caller’s text and session/call ID to our existing API.
+Receive the API’s text response.
+Convert that response to speech using TTS.
+Play the audio to the caller.
+Our API returns text only. The phone repository owns telephony, STT, and TTS. Our existing repository continues to own the conversation, menu lookup, order state, tool calls, and total/tax calculation.
+Do not copy, recreate, or modify calculator, menu, or conversation logic. Do not add pricing logic to the phone repository. Only integrate the phone audio/text transport with the existing API.
