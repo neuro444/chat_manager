@@ -198,7 +198,9 @@ def _money(value) -> str:
     return f"{float(value):.2f}"
 
 
-def _build_ready_order(repo, provider, user_id: str, requested: bool):
+def _build_ready_order(
+    repo, provider, user_id: str, requested: bool, customer_name=None
+):
     """Build an order only from an actual successful price_order tool result.
 
     The LLM controls conversation wording, but it is not the source of truth for
@@ -242,8 +244,13 @@ def _build_ready_order(repo, provider, user_id: str, requested: bool):
         return False, None
 
     user = repo.get_user(user_id)
+    resolved_name = str(customer_name or "").strip()
+    if not resolved_name:
+        resolved_name = str(user.name if user else "").strip()
+    if not resolved_name:
+        resolved_name = "no_name_given"
     return True, {
-        "customer_name": user.name if user else "",
+        "customer_name": resolved_name,
         "fulfillment": "pickup",
         "items": items,
         "subtotal": subtotal,
@@ -286,7 +293,8 @@ def handle_message(
     )
     ended = parsed["call_ended"]
     order_ready, order = _build_ready_order(
-        repo, provider, user_id, parsed["order_ready"]
+        repo, provider, user_id, parsed["order_ready"],
+        parsed.get("name") or (parsed.get("order") or {}).get("customer_name"),
     )
     to_manager = parsed["To_manager"]
     extensions = _response_extensions(parsed)
@@ -371,7 +379,8 @@ def stream_message(repo, provider, user_id, session_id, user_message):
     )
     ended = parsed["call_ended"]
     order_ready, order = _build_ready_order(
-        repo, provider, user_id, parsed["order_ready"]
+        repo, provider, user_id, parsed["order_ready"],
+        parsed.get("name") or (parsed.get("order") or {}).get("customer_name"),
     )
     to_manager = parsed["To_manager"]
     extensions = _response_extensions(parsed)

@@ -65,6 +65,45 @@ def test_order_flags_are_returned_and_persisted(repo):
     assert assistant.metadata["response_fields"]["order_type"] == "pickup"
 
 
+def test_current_call_name_reaches_verified_order_without_profile_write(repo):
+    from providers.fake_provider import FakeProvider
+    from service import handle_message
+
+    raw = _raw(
+        "Maya, your order is confirmed.", call_ended=True,
+        order_ready=True, order_type="pickup", tools_called=True,
+        name="Maya", order={"customer_name": "Maya"},
+    )
+    priced = {"name": "price_order", "result": {
+        "items": [{"name": "Chilli Paneer", "price": 11.99,
+                   "quantity": 1, "line_total": 11.99}],
+        "unknown": [], "subtotal": 11.99, "tax": 0.93, "total": 12.92,
+    }}
+    out = handle_message(
+        repo, FakeProvider(raw, [priced]), "+9199", None, "Maya"
+    )
+    assert out["name"] == "Maya"
+    assert out["order"]["customer_name"] == "Maya"
+    assert repo.get_user("+9199").name == ""  # shared phones stay unmodified
+
+
+def test_verified_order_uses_no_name_sentinel_when_name_is_unavailable(repo):
+    from providers.fake_provider import FakeProvider
+    from service import handle_message
+
+    raw = _raw(
+        "Your order is confirmed.", call_ended=True, order_ready=True,
+        order_type="pickup", tools_called=True, name="no_name_given",
+    )
+    priced = {"name": "price_order", "result": {
+        "items": [{"name": "Samosa", "price": 2, "quantity": 1,
+                   "line_total": 2}],
+        "unknown": [], "subtotal": 2, "tax": 0.16, "total": 2.16,
+    }}
+    out = handle_message(repo, FakeProvider(raw, [priced]), "+9100", None, "no")
+    assert out["order"]["customer_name"] == "no_name_given"
+
+
 def test_manager_flag_is_returned_and_persisted(repo):
     from providers.fake_provider import FakeProvider
     from service import handle_message
@@ -186,6 +225,11 @@ def test_cake_and_catering_callback_is_a_multi_turn_conversation():
     assert "answer that question before doing anything else" in SYSTEM_PROMPT
     assert "caller must explicitly indicate they are finished" in SYSTEM_PROMPT
     assert "requirements include a question; continue instead of handing off" in SYSTEM_PROMPT
+    assert "What name should I include" in SYSTEM_PROMPT
+    assert "do not rely solely on an older name" in SYSTEM_PROMPT
+    assert "Aim for one or two useful" in SYSTEM_PROMPT
+    assert "Do not repeat the same missing-detail question" in SYSTEM_PROMPT
+    assert "unclear speech does not become an interrogation" in SYSTEM_PROMPT
 
 
 def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):
