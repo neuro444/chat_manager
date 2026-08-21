@@ -226,7 +226,9 @@ def test_cake_and_catering_callback_is_a_multi_turn_conversation():
     assert "caller must explicitly indicate they are finished" in SYSTEM_PROMPT
     assert "requirements include a question; continue instead of handing off" in SYSTEM_PROMPT
     assert "What name should I include" in SYSTEM_PROMPT
-    assert "do not rely solely on an older name" in SYSTEM_PROMPT
+    assert "most recent same-number order/callback context" in SYSTEM_PROMPT
+    assert "do not ask for it again" in SYSTEM_PROMPT
+    assert "Never choose an older" in SYSTEM_PROMPT
     assert "Aim for one or two useful" in SYSTEM_PROMPT
     assert "Do not repeat the same missing-detail question" in SYSTEM_PROMPT
     assert "unclear speech does not become an interrogation" in SYSTEM_PROMPT
