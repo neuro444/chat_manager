@@ -7,6 +7,7 @@ Staff read the dashboard; callers never see a screen.
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
@@ -16,6 +17,19 @@ from service import handle_message
 from storage import make_repo
 
 app = FastAPI(title="Chat Manager — Phone Ordering")
+
+# Allows the voice_central dashboard (browser JS on a different origin)
+# to call this API directly. telephony calls chat_manager server-to-server
+# (no browser involved, CORS never applies there) and chat_manager's own
+# bundled dashboard is served same-origin -- this is specifically for
+# voice_central. Update allow_origins with the real production dashboard
+# origin once that's known; localhost:3000 covers local dev for now.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["*"],
+)
 WEB = Path(__file__).parent / "web"
 
 _repo = None
