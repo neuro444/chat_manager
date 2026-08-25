@@ -33,9 +33,14 @@ def test_prompt_contains_business_hours_and_closed_order_timing():
     p = SYSTEM_PROMPT.lower()
     assert "sunday through saturday" in p
     assert "11:00 am to 11:00 pm" in p
+    assert "business-hours finalization gate" in p
+    assert "caller never asks about hours" in p
+    assert "before calling price_order" in p
     assert "do not guess the current local time" in p
+    assert "when reliable time is unavailable" in p
     assert "processing when it opens" in p
     assert "twenty to thirty minutes after preparation starts" in p
+    assert "proactive closed-hours check at finalization" in p
 
 
 def test_prompt_requires_unit_prices_in_the_readback():
