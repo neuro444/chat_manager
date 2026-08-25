@@ -32,7 +32,9 @@ this repository's scope is deliberately expanded later:
 - Mapping an external call or channel ID to this API's `user_id` and `session_id`.
 - Reusing the returned `session_id` for every turn in the same conversation.
 - Sending transcripts into `/chat` and playing or displaying only `answer`.
-- Acting on `call_ended`, `order_placed`, `To_manager`, and `tools_called`.
+- Acting on `call_ended`, `order_ready`, structured `order`, `To_manager`, and
+  `tools_called`. The external system submits ready orders and records whether
+  its order service accepted them.
 - Creating manager notifications from `summary` and `verbatim_user_chat`.
 - Server-to-server printing and revocable device-scoped print tokens.
 - Typesense or any other search/analytics index not present in this repository.

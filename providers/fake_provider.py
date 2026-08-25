@@ -7,10 +7,12 @@ from typing import Iterator
 
 
 class FakeProvider:
-    def __init__(self, reply: str = "This is a fake reply."):
+    def __init__(self, reply: str = "This is a fake reply.", tool_results=None):
         self.reply = reply
         self.last_messages: list[dict] | None = None
         self.call_count = 0
+        self.last_tool_results = tool_results or []
+        self.last_tools_called = bool(self.last_tool_results)
 
     def complete(self, messages: list[dict], **kw) -> str:
         self.last_messages = messages

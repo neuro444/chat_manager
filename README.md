@@ -34,7 +34,8 @@ Content-Type: application/json
 
 Reuse the returned `session_id` on subsequent turns. The response contains the
 spoken/displayed `answer` and control fields including `call_ended`,
-`order_placed`, `To_manager`, and `tools_called`.
+`order_ready`, structured `order`, `To_manager`, `Transfer_to_Manager`, and
+`tools_called`.
 
 See [integration.md](integration.md) for the complete API contract, audio flow,
 endpoint reference, and client examples.

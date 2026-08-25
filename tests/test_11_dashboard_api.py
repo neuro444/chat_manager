@@ -61,6 +61,14 @@ def test_search_sessions_returns_preview(client):
     assert hits and "vindaloo" in hits[0]["preview"].lower()
 
 
+def test_staff_search_returns_matches_across_callers(client):
+    client.post("/chat", json={"user_id": "+9141", "message": "extra spicy vindaloo"})
+    client.post("/chat", json={"user_id": "+9142", "message": "vindaloo mild"})
+    hits = client.get("/staff/search", params={"q": "vindaloo"}).json()
+    assert {hit["user_id"] for hit in hits} == {"+9141", "+9142"}
+    assert all(hit["session_id"] and hit["created_at"] for hit in hits)
+
+
 def test_dashboard_page_served(client):
     r = client.get("/")
     assert r.status_code == 200 and "text/html" in r.headers["content-type"]

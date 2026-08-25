@@ -38,12 +38,17 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "chat_manager")
 
 # ── Context budget ────────────────────
-MAX_CONTEXT_TOKENS = _int("MAX_CONTEXT_TOKENS", 8000)
+MAX_CONTEXT_TOKENS = _int("MAX_CONTEXT_TOKENS", 32000)
 RESERVED_FOR_REPLY = _int("RESERVED_FOR_REPLY", 1500)
 CHARS_PER_TOKEN = 4
+# Encoding used when the model name is not one tiktoken knows. o200k_base is
+# the current GPT-4o/5 family encoding.
+TIKTOKEN_ENCODING = os.getenv("TIKTOKEN_ENCODING", "o200k_base")
 HISTORY_WINDOW = _int("HISTORY_WINDOW", 20)
 SUMMARY_TRIGGER_EVERY = _int("SUMMARY_TRIGGER_EVERY", 10)
 CROSS_SESSION_WINDOW = _int("CROSS_SESSION_WINDOW", 5)
+CROSS_SESSION_SESSION_WINDOW = _int("CROSS_SESSION_SESSION_WINDOW", 5)
+CROSS_SESSION_MESSAGE_WINDOW = _int("CROSS_SESSION_MESSAGE_WINDOW", 40)
 CARRY_OVER_SCAN_LIMIT = _int("CARRY_OVER_SCAN_LIMIT", 20)
 
 CONTEXT_BUDGET_WEIGHTS = {
@@ -63,6 +68,7 @@ SESSION_TIMEOUT_MINUTES = _int("SESSION_TIMEOUT_MINUTES", 5)
 # finish speaking the sign-off before the line drops. We only report it.
 CALL_END_DELAY_SECONDS = _int("CALL_END_DELAY_SECONDS", 20)
 TAX_RATE = _float("TAX_RATE", 0.0775)
+PICKUP_PREPARATION_MINUTES = os.getenv("PICKUP_PREPARATION_MINUTES", "20-30")
 
 # ── Voice ─────────────────────────────
 STT_MODEL = os.getenv("STT_MODEL", "gpt-transcribe")
@@ -76,3 +82,10 @@ ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_v3")
 # ── Server ────────────────────────────
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = _int("PORT", 8000)
+
+# ── API auth ──────────────────────────
+# Shared secret the telephony gateway sends on every request. When empty,
+# auth is disabled entirely so local development and the test suite are
+# unaffected; set it in production, where the API is reachable over the network.
+API_KEY = os.getenv("API_KEY", "")
+API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")

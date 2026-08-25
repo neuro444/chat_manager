@@ -40,6 +40,11 @@ class MemoryStore:
         self.ensure_user(user_id)
         self.users[user_id].name = name
 
+    def delete_user(self, user_id):
+        for session in list(self.list_sessions(user_id)):
+            self.delete_session(session.session_id)
+        self.users.pop(user_id, None)
+
     # ── sessions ─────────────────────────
     def create_session(self, user_id, title="New chat"):
         s = Session(session_id=str(uuid.uuid4()), user_id=user_id, title=title)
@@ -139,3 +144,7 @@ class MemoryStore:
     def mark_session_ended(self, session_id):
         if session_id in self.sessions:
             self.sessions[session_id].metadata["ended"] = True
+
+    def set_session_debug(self, session_id, debug):
+        if session_id in self.sessions:
+            self.sessions[session_id].metadata["llm_debug"] = debug

@@ -10,6 +10,7 @@ Assistants API sunsets in H1 2026). Differences that matter here:
 
 Key is read from OPENAI_API_KEY in the environment only.
 """
+import json
 import time
 from typing import Iterator
 
@@ -38,6 +39,24 @@ class OpenAIProvider:
         self.client = OpenAI()
         self.model = model or config.LLM_MODEL
         self.last_tools_called = False
+        self.last_tool_results: list[dict] = []
+        # Exact token usage reported by the API for the most recent turn.
+        # Summed across tool round trips, since one caller turn can be
+        # several API calls and you are billed for all of them.
+        self.last_usage: dict | None = None
+
+    def _record_usage(self, response) -> None:
+        """Accumulate the API's reported usage for this turn."""
+        from tokens import usage_from_response
+
+        usage = usage_from_response(response)
+        if usage is None:
+            return
+        if self.last_usage is None:
+            self.last_usage = usage
+            return
+        for key in ("input_tokens", "output_tokens", "total_tokens"):
+            self.last_usage[key] += usage[key]
 
     def _create(self, messages: list[dict], stream: bool = False, tools=None):
         instructions, turns = split_instructions(messages)
@@ -54,12 +73,16 @@ class OpenAIProvider:
 
     def complete(self, messages: list[dict], tools=None, **kw) -> str:
         self.last_tools_called = False
+        self.last_tool_results = []
+        self.last_usage = None
         last_err = None
         for attempt in range(config.MAX_RETRIES):
             try:
                 if tools:
                     return self._complete_with_tools(messages, tools)
-                return self._create(messages).output_text or ""
+                response = self._create(messages)
+                self._record_usage(response)
+                return response.output_text or ""
             except (RateLimitError, APIError) as err:
                 last_err = err
                 if attempt < config.MAX_RETRIES - 1:
@@ -72,6 +95,7 @@ class OpenAIProvider:
 
         convo = list(messages)
         resp = self._create(convo, tools=TOOL_SCHEMAS)
+        self._record_usage(resp)
         calls = [o for o in (resp.output or [])
                  if getattr(o, "type", "") == "function_call"]
         if not calls:
@@ -81,13 +105,28 @@ class OpenAIProvider:
 
         for call in calls:
             result = run_tool(call.name, call.arguments)
+            try:
+                parsed_result = json.loads(result)
+            except (json.JSONDecodeError, TypeError):
+                parsed_result = result
+            self.last_tool_results.append({
+                "name": call.name,
+                "result": parsed_result,
+            })
             convo.append({"type": "function_call", "call_id": call.call_id,
                           "name": call.name, "arguments": call.arguments})
             convo.append({"type": "function_call_output",
                           "call_id": call.call_id, "output": result})
-        return self._create(convo, tools=TOOL_SCHEMAS).output_text or ""
+        final = self._create(convo, tools=TOOL_SCHEMAS)
+        self._record_usage(final)
+        return final.output_text or ""
 
     def stream(self, messages: list[dict], **kw) -> Iterator[str]:
+        # Streaming currently exposes no ordering tools, so it can never carry
+        # a ready order from a previous non-streaming turn.
+        self.last_tools_called = False
+        self.last_tool_results = []
+        self.last_usage = None
         for event in self._create(messages, stream=True):
             if getattr(event, "type", None) == "response.output_text.delta":
                 delta = getattr(event, "delta", None)
@@ -95,7 +134,9 @@ class OpenAIProvider:
                     yield delta
 
     def count_tokens(self, text: str) -> int:
-        return len(text) // config.CHARS_PER_TOKEN
+        from tokens import count_text
+
+        return count_text(text)
 
     def transcribe(self, audio_path: str) -> str:
         """STT. gpt-transcribe is the current default; whisper-1 still works."""

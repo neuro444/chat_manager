@@ -18,7 +18,8 @@ itself currently performs no authentication.
 ## Conversation lifecycle
 
 1. Choose a stable `user_id` for the customer.
-2. Send the first message to `POST /chat` with `session_id: null`.
+2. Send the first message of a new call to `POST /chat` with
+   `session_id: null` and `new_session: true`.
 3. Save the returned `session_id`.
 4. Send that `session_id` with every later message in the conversation.
 5. Display or speak only the returned `answer`.
@@ -70,6 +71,7 @@ Request:
 {
   "user_id": "customer-123",
   "session_id": null,
+  "new_session": true,
   "message": "I would like two samosas"
 }
 ```
@@ -79,7 +81,8 @@ Request:
 | Field | Type | Required | Meaning |
 |---|---|---:|---|
 | `user_id` | string | No | Stable customer identity; defaults to `default` |
-| `session_id` | string or null | No | `null` initially; reuse the returned ID afterward |
+| `session_id` | string or null | No | `null` always starts a new isolated session; reuse the returned ID only within that call |
+| `new_session` | boolean | No | Optional explicit new-call signal; also forces a new session even if an ID was supplied |
 | `message` | string | Yes | Current finalized user utterance or text message |
 
 Blank messages return HTTP `400`.
@@ -91,9 +94,11 @@ Blank messages return HTTP `400`.
   "answer": "Certainly, two samosas. Is that everything for your order?",
   "session_id": "81068fc8-5d86-4f67-87fe-a75034a2f42d",
   "call_ended": false,
-  "order_placed": false,
+  "order_ready": false,
   "To_manager": false,
+  "Transfer_to_Manager": false,
   "tools_called": false,
+  "order": null,
   "summary": "",
   "verbatim_user_chat": [],
   "end_delay_seconds": 0
@@ -107,8 +112,10 @@ Blank messages return HTTP `400`.
 | `answer` | string | The only value intended for the customer |
 | `session_id` | string | Send with the next turn |
 | `call_ended` | boolean | Conversation is complete |
-| `order_placed` | boolean | A regular pickup order was reviewed and accepted |
+| `order_ready` | boolean | A verified pickup order is ready for external submission |
+| `order` | object or null | Structured order from the actual pricing-tool result |
 | `To_manager` | boolean | Cake or catering request requires manager follow-up |
+| `Transfer_to_Manager` | boolean | Current interaction requires direct restaurant-staff transfer |
 | `tools_called` | boolean | A server-side LLM tool actually ran for this response |
 | `summary` | string | Manager-handoff summary; otherwise empty |
 | `verbatim_user_chat` | string array | Original user messages for manager handoff |
@@ -117,6 +124,18 @@ Blank messages return HTTP `400`.
 `tools_called` is verified against actual provider tool execution. It is not
 accepted solely because the model wrote `true`.
 
+`order_ready` does not mean that an order was placed. Chat Manager constructs
+`order` from the successful `price_order` tool result and returns it to the
+caller. The integrating service should submit that object to its order system
+and separately record the order system's acceptance or rejection. Never parse
+items, quantities, or totals from `answer`.
+
+When `Transfer_to_Manager` is true, the external communication provider should
+transfer or escalate the current interaction to restaurant staff. It is separate
+from `To_manager`, which is the asynchronous cake/catering follow-up workflow.
+Additional JSON fields defined by the prompt pass through `/chat` and are stored
+under the assistant message's `response_fields` metadata.
+
 ### Completed pickup order
 
 ```json
@@ -124,9 +143,19 @@ accepted solely because the model wrote `true`.
   "answer": "Your order is confirmed and will be ready in approximately twenty to thirty minutes. Thanks for calling CakeWorld Alpharetta.",
   "session_id": "81068fc8-5d86-4f67-87fe-a75034a2f42d",
   "call_ended": true,
-  "order_placed": true,
+  "order_ready": true,
   "To_manager": false,
+  "Transfer_to_Manager": false,
   "tools_called": true,
+  "order": {
+    "customer_name": "Priya",
+    "fulfillment": "pickup",
+    "items": [{"name":"Veg Biriyani","quantity":3,"unit_price":"13.99","line_total":"41.97"}],
+    "subtotal": "41.97",
+    "tax": "3.25",
+    "total": "45.22",
+    "preparation_minutes": "20-30"
+  },
   "summary": "",
   "verbatim_user_chat": [],
   "end_delay_seconds": 20
@@ -140,9 +169,11 @@ accepted solely because the model wrote `true`.
   "answer": "I’ll send your catering requirements to our manager, who will contact you.",
   "session_id": "81068fc8-5d86-4f67-87fe-a75034a2f42d",
   "call_ended": true,
-  "order_placed": false,
+  "order_ready": false,
   "To_manager": true,
+  "Transfer_to_Manager": false,
   "tools_called": false,
+  "order": null,
   "summary": "Customer requests office catering for approximately sixty people next Friday.",
   "verbatim_user_chat": [
     "I need catering for an office event.",
@@ -282,6 +313,7 @@ API.
 
 ```javascript
 let sessionId = null;
+let isNewCall = true;
 
 async function sendTurn(userId, message) {
   const response = await fetch("https://api.example.com/chat", {
@@ -290,6 +322,7 @@ async function sendTurn(userId, message) {
     body: JSON.stringify({
       user_id: userId,
       session_id: sessionId,
+      new_session: isNewCall,
       message
     })
   });
@@ -298,11 +331,12 @@ async function sendTurn(userId, message) {
 
   const result = await response.json();
   sessionId = result.session_id;
+  isNewCall = false;
 
   displayOrSpeak(result.answer);
 
   if (result.To_manager) createManagerHandoff(result);
-  if (result.order_placed) recordCompletedOrder(result);
+  if (result.order_ready) submitOrder(result.order);
   if (result.call_ended) finishConversation(result.end_delay_seconds);
 
   return result;
@@ -348,6 +382,10 @@ The current endpoints do not authenticate callers or authorize access to
 `user_id` and `session_id`. Before exposing the API publicly:
 
 - Require authentication at a reverse proxy or application gateway.
+- Derive `user_id` from the trusted telephony provider's verified caller ID;
+  never accept a caller-selected identity as authoritative.
+- Start every phone call with `session_id: null`, then keep the returned
+  `session_id` only in that call's server-side state.
 - Use HTTPS.
 - Restrict staff/history endpoints separately where possible.
 - Rate-limit `/chat`, `/stt`, and `/tts`.

@@ -1,54 +1,82 @@
-"""Cross-session memory — retrieval over the user's OTHER sessions."""
+"""Dated recent-call context scoped to the same caller phone number."""
 import config
 
-_HISTORY_CUES = (
-    "last time", "previous", "before", "usual", "again", "same as",
-    "what did i", "my last", "earlier", "recent",
-)
 
-
-def _looks_like_history_question(text: str) -> bool:
-    low = (text or "").lower()
-    return any(cue in low for cue in _HISTORY_CUES)
-
-
-def _last_call_messages(repo, user_id, current_session, limit=6):
-    """The caller's user-messages from their most recent other session."""
-    for sess in repo.list_sessions(user_id, 5):
-        if sess.session_id == current_session:
+def _session_facts(session, messages) -> list[str]:
+    """Structured final-call facts saved on assistant-message metadata."""
+    facts = []
+    for message in reversed(messages):
+        if message.role != "assistant":
             continue
-        msgs = [m for m in repo.all_messages(sess.session_id) if m.role == "user"]
-        if msgs:
-            return msgs[-limit:]
-    return []
-
+        metadata = message.metadata or {}
+        extensions = metadata.get("response_fields") or {}
+        order = metadata.get("order") or {}
+        order_type = extensions.get("order_type")
+        name = extensions.get("name") or order.get("customer_name")
+        summary = metadata.get("summary")
+        if order_type:
+            facts.append(f"- order type: {order_type}")
+        if name:
+            facts.append(f"- order name: {name}")
+        items = order.get("items") or []
+        if items:
+            rendered = ", ".join(
+                f"{item.get('quantity', 1)} × {item.get('name', '')}" for item in items
+            )
+            facts.append(f"- ordered items: {rendered}")
+        if order.get("total"):
+            facts.append(f"- order total: {order['total']}")
+        if summary:
+            facts.append(f"- call summary: {summary}")
+        if facts:
+            break
+    if session.running_summary:
+        facts.append(f"- conversation summary: {session.running_summary}")
+    return facts
 
 def build_memory_context(
     repo, user_id: str, query: str, current_session: str, entities: list[str] | None = None
 ) -> str:
-    """Return a text block of relevant past-conversation snippets, or ''.
+    """Return the latest dated messages from this phone number's prior calls.
 
-    Always scoped to user_id — this is the boundary that keeps one user's
-    history out of another user's prompt.
+    `user_id` is the caller phone number at the API boundary. We intentionally
+    retain both caller and assistant turns: an order name such as "Sri Krishna"
+    only has meaning beside the assistant's preceding name question. Different
+    family members may share a phone, so this is conversation context rather
+    than a permanent person-name profile.
     """
-    search_text = query
-    if entities:
-        search_text = f"{query} {' '.join(entities)}"
+    sessions = []
+    for session in repo.list_sessions(user_id, 50):
+        if session.session_id == current_session:
+            continue
+        messages = [
+            message for message in repo.all_messages(session.session_id)
+            if message.role in {"user", "assistant"}
+        ]
+        if not messages:
+            continue
+        sessions.append((session, messages))
+        if len(sessions) >= config.CROSS_SESSION_SESSION_WINDOW:
+            break
 
-    hits = repo.search_messages(
-        user_id, search_text, current_session, config.CROSS_SESSION_WINDOW
-    )
-
-    # A vague follow-up ("what did I order last time?") shares no keywords with
-    # the order itself. Fall back to the caller's most recent previous call.
-    if not hits and _looks_like_history_question(query):
-        hits = _last_call_messages(repo, user_id, current_session)
-
-    if not hits:
+    if not sessions:
         return ""
 
-    lines = []
-    for h in hits:
-        snippet = h.content.strip().replace("\n", " ")[:200]
-        lines.append(f"- {snippet}")
-    return "\n".join(lines)
+    # Divide the transcript allowance across calls so one long conversation
+    # cannot hide the other recent sessions. Structured facts are always kept.
+    base, extra = divmod(config.CROSS_SESSION_MESSAGE_WINDOW, len(sessions))
+    calls = []
+    for index, (session, messages) in enumerate(sessions):
+        quota = base + (1 if index < extra else 0)
+        transcript = messages[-quota:] if quota else []
+        stamp = session.updated_at.strftime("%Y-%m-%d %H:%M UTC")
+        status = "completed" if session.metadata.get("ended") else "open"
+        lines = [f"Previous call — {stamp} — {status}"]
+        lines.extend(_session_facts(session, messages))
+        lines.append("- transcript:")
+        for message in transcript:
+            role = "caller" if message.role == "user" else "assistant"
+            content = message.content.strip().replace("\n", " ")[:500]
+            lines.append(f"  - {role}: {content}")
+        calls.append("\n".join(lines))
+    return "\n\n".join(calls)

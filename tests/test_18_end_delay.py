@@ -11,7 +11,7 @@ from service import handle_message
 END = json.dumps({
     "answer": "Done. CakeWorld Alpharetta.",
     "call_ended": True,
-    "order_placed": True,
+    "order_ready": False,
     "To_manager": False,
     "tools_called": True,
 })
