@@ -234,6 +234,20 @@ def test_cake_and_catering_callback_is_a_multi_turn_conversation():
     assert "unclear speech does not become an interrogation" in SYSTEM_PROMPT
 
 
+def test_prompt_resolves_name_before_greeting_and_gates_ambiguous_handoffs():
+    from prompts import SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+
+    assert "NAME RESOLUTION PRECEDENCE — APPLY BEFORE THE FIRST REPLY" in prompt
+    assert "A dated newer name overrides a conflicting older profile name" in prompt
+    assert "Use the same resolved name consistently in the greeting" in prompt
+    assert "CALLBACK-NAME GATE" in prompt
+    assert "two or more different real names" in prompt
+    assert "Do not set To_manager=true" in prompt
+    assert "CONFLICTING FAMILY NAMES REQUIRE A CALLBACK NAME" in prompt
+    assert "NEWER DATED NAME OVERRIDES A STALE PROFILE AT GREETING" in prompt
+
+
 def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):
     from providers.fake_provider import FakeProvider
     from service import handle_message

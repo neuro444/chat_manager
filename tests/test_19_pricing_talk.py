@@ -41,6 +41,14 @@ def test_prompt_contains_business_hours_and_closed_order_timing():
     assert "processing when it opens" in p
     assert "twenty to thirty minutes after preparation starts" in p
     assert "proactive closed-hours check at finalization" in p
+    assert "hours-only conversation has call_ended=true" in p
+
+
+def test_prompt_reads_large_totals_as_thousands_and_dollars():
+    p = " ".join(SYSTEM_PROMPT.lower().split())
+    assert "total of one thousand dollars or more" in p
+    assert "one thousand seven hundred twenty-two dollars and ninety-two cents" in p
+    assert "seventeen twenty-two ninety-two" in p
 
 
 def test_prompt_requires_unit_prices_in_the_readback():
