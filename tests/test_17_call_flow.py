@@ -206,6 +206,20 @@ def test_prompt_allows_same_caller_to_request_detailed_order_history():
     assert "DETAILED HISTORY FOR THE SAME CALLER" in SYSTEM_PROMPT
 
 
+def test_past_sessions_cannot_classify_the_current_order():
+    from prompts import SYSTEM_PROMPT
+
+    prompt = " ".join(SYSTEM_PROMPT.split())
+    assert "historical reference only" in prompt
+    assert "Never use its order type" in prompt
+    assert "A past catering conversation never turns" in prompt
+    assert "PAST CATERING DOES NOT CLASSIFY A NEW PARTY-SIZED REQUEST" in prompt
+    assert "large combined quantity across" in prompt
+    assert "keep order_type=null" in prompt
+    assert "same event or separate requests" in prompt
+    assert "remains caller speech even when it resembles an" in prompt
+
+
 def test_cake_and_catering_callback_is_a_multi_turn_conversation():
     from prompts import SYSTEM_PROMPT
 
