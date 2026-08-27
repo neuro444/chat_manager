@@ -35,10 +35,7 @@ def build_context_report(repo, user_id: str, session_id: str, user_message: str)
     """Render the five contexts as text."""
     session = repo.get_session(session_id)
     entities = resolve_active_entities(repo, session_id, user_message)
-    user = repo.get_user(user_id)
-
     out = [f"\n{'═' * 72}\nCONTEXT FOR TURN — caller {user_id}"
-           f"{f' ({user.name})' if user and user.name else ''}"
            f" · session {session_id[:8]}\n{'═' * 72}"]
 
     # 1 — the current query

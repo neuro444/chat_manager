@@ -1,4 +1,4 @@
-"""Layer 13 — menu, order calculator, caller names, session expiry."""
+"""Layer 13 — menu, order calculator, and session expiry."""
 import json
 import pytest
 
@@ -77,24 +77,25 @@ def test_find_item_exact_and_fuzzy():
     assert find_item("nonexistent dish") is None
 
 
-# ── caller names ─────────────────────────
-def test_caller_name_is_stored_and_reused(repo):
+# ── caller names remain model context, not Python identity ────────────────
+def test_static_profile_name_is_not_injected_into_model_context(repo):
     from providers.fake_provider import FakeProvider
     from service import build_context, handle_message
-    repo.set_user_name("+919876543210", "Sree")
+    repo.set_user_name("+919876543210", "StaleName")
     handle_message(repo, FakeProvider(), "+919876543210", None, "one samosa")
     sid = repo.list_sessions("+919876543210")[0].session_id
     blob = "\n".join(m["content"] for m in
                      build_context(repo, "+919876543210", sid, "hi"))
-    assert "Sree" in blob
+    assert "StaleName" not in blob
+    assert "Caller phone: +919876543210" in blob
 
 
-def test_name_extracted_from_conversation(repo):
+def test_python_does_not_extract_or_store_name_from_conversation(repo):
     from providers.fake_provider import FakeProvider
     from service import handle_message
     handle_message(repo, FakeProvider(), "+911111111111", None,
                    "Hi, this is Priya, I'd like a dosa")
-    assert repo.get_user("+911111111111").name == "Priya"
+    assert repo.get_user("+911111111111").name == ""
 
 
 # ── session expiry ───────────────────────
@@ -119,18 +120,3 @@ def test_recent_session_is_resumed(repo):
     out2 = handle_message(repo, FakeProvider(), "+913333333333", out["session_id"],
                           "and a lassi")
     assert out2["session_id"] == out["session_id"]
-
-
-@pytest.mark.parametrize("text,expected", [
-    ("This is Priya, two samosas please", "Priya"),      # sentence-initial
-    ("Hi, this is Priya. What do you have?", "Priya"),   # mid-sentence
-    ("this is priya calling", "Priya"),                  # all lowercase
-    ("My name is Arjun", "Arjun"),
-    ("I'm Deepa", "Deepa"),
-    ("Hi, I'd like two samosas", None),                  # no name present
-    ("I'm looking for the menu", None),                  # verb, not a name
-    ("This is for pickup", None),                        # not a name
-])
-def test_name_extraction_variants(text, expected):
-    from context.caller import extract_name
-    assert extract_name(text) == expected

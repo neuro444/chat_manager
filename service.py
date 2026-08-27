@@ -10,7 +10,6 @@ import json
 import config
 import tokens
 from context.assembler import assemble
-from context.caller import capture_name
 from context.callflow import parse_model_response
 from context.history import get_history
 from context.memory import build_memory_context
@@ -41,18 +40,11 @@ def build_context(repo, user_id: str, session_id: str, user_message: str) -> lis
     # controls how they may be referenced; they are never database mutations.
     memory = build_memory_context(repo, user_id, user_message, session_id, entities)
 
-    user = repo.get_user(user_id)
-    bits = [f"Caller phone: {user_id}"]
-    if user and user.name:
-        # Whether to say the name is turn-dependent: greeting or final
-        # confirmation only. Telling the model on every turn to "greet them by
-        # name" is what makes it repeat the name in every reply.
-        first_turn = repo.message_count(session_id) <= 1
-        when = ("greet them by name now" if first_turn
-                else "do NOT use their name in this reply unless you are "
-                     "confirming the final order")
-        bits.append(f"Caller name: {user.name} ({when})")
-    profile = "\n".join(bits)
+    # A phone number can belong to several family members. Do not inject a
+    # permanent profile name into the conversation. The model resolves the
+    # applicable person from current chat, summary, and dated call history and
+    # emits `user_name` as structured metadata for subsequent turns.
+    profile = f"Caller phone: {user_id}"
 
     return assemble(
         user_message=user_message,
@@ -86,8 +78,6 @@ def _start_turn(repo, user_id, session_id, user_message, new_session=False):
     repo.ensure_user(user_id)
     session_id = resolve_session(repo, user_id, session_id, new_session=new_session)
     is_first_turn = repo.message_count(session_id) == 0
-    capture_name(repo, user_id, user_message)
-
     # persist the user turn BEFORE calling the LLM, so a failure mid-call never
     # loses what the user typed
     repo.append_message(session_id, "user", user_message)
@@ -198,9 +188,7 @@ def _money(value) -> str:
     return f"{float(value):.2f}"
 
 
-def _build_ready_order(
-    repo, provider, user_id: str, requested: bool, customer_name=None
-):
+def _build_ready_order(provider, requested: bool, customer_name=None):
     """Build an order only from an actual successful price_order tool result.
 
     The LLM controls conversation wording, but it is not the source of truth for
@@ -243,10 +231,7 @@ def _build_ready_order(
     except (KeyError, TypeError, ValueError):
         return False, None
 
-    user = repo.get_user(user_id)
     resolved_name = str(customer_name or "").strip()
-    if not resolved_name:
-        resolved_name = str(user.name if user else "").strip()
     if not resolved_name:
         resolved_name = "no_name_given"
     return True, {
@@ -293,7 +278,7 @@ def handle_message(
     )
     ended = parsed["call_ended"]
     order_ready, order = _build_ready_order(
-        repo, provider, user_id, parsed["order_ready"],
+        provider, parsed["order_ready"],
         parsed.get("name") or (parsed.get("order") or {}).get("customer_name"),
     )
     to_manager = parsed["To_manager"]
@@ -379,7 +364,7 @@ def stream_message(repo, provider, user_id, session_id, user_message):
     )
     ended = parsed["call_ended"]
     order_ready, order = _build_ready_order(
-        repo, provider, user_id, parsed["order_ready"],
+        provider, parsed["order_ready"],
         parsed.get("name") or (parsed.get("order") or {}).get("customer_name"),
     )
     to_manager = parsed["To_manager"]

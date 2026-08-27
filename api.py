@@ -100,7 +100,9 @@ def _message_result(message) -> dict:
         "order_ready": bool(metadata.get("order_ready", response_fields.get("order_ready"))),
         "order": order if isinstance(order, dict) else None,
         "order_type": response_fields.get("order_type") or "",
-        "name": _usable_name(response_fields.get("name")),
+        "name": _usable_name(
+            response_fields.get("user_name") or response_fields.get("name")
+        ),
     }
 
 
@@ -183,14 +185,11 @@ def callers():
     repo = get_repo()
     out = []
     for r in repo.list_callers():
-        user = repo.get_user(r["user_id"])
         resolved_name = ""
         for session in repo.list_sessions(r["user_id"], limit=50):
             resolved_name = _session_facts(repo, session)["name"]
             if resolved_name:
                 break
-        if not resolved_name:
-            resolved_name = user.name if user else ""
         out.append({**r, "name": _usable_name(resolved_name),
                     "last_active": _iso(r.get("last_active"))})
     return out

@@ -12,12 +12,15 @@ def _session_facts(session, messages) -> list[str]:
         extensions = metadata.get("response_fields") or {}
         order = metadata.get("order") or {}
         order_type = extensions.get("order_type")
-        name = extensions.get("name") or order.get("customer_name")
+        user_name = extensions.get("user_name")
+        order_name = extensions.get("name") or order.get("customer_name")
         summary = metadata.get("summary")
         if order_type:
             facts.append(f"- order type: {order_type}")
-        if name:
-            facts.append(f"- order name: {name}")
+        if user_name:
+            facts.append(f"- caller name: {user_name}")
+        if order_name and order_name != user_name:
+            facts.append(f"- order name: {order_name}")
         items = order.get("items") or []
         if items:
             rendered = ", ".join(

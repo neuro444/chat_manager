@@ -90,7 +90,7 @@ def test_search_handles_plus_prefixed_numbers(client):
     assert hits
 
 
-def _completed_order(client, phone="+915555555555", name="Anita"):
+def _completed_order(client, phone="+915555555555", name="Anita", user_name=None):
     import api
 
     repo = api.get_repo()
@@ -114,6 +114,7 @@ def _completed_order(client, phone="+915555555555", name="Anita"):
                 "preparation_minutes": "20-30",
             },
             "response_fields": {
+                "user_name": user_name or name,
                 "name": name,
                 "order_type": "pickup",
                 "call_ended": True,
@@ -130,6 +131,15 @@ def test_sessions_and_callers_use_structured_emitted_name(client):
     assert session["session_id"] == sid
     assert session["name"] == "Anita"
     assert session["order_type"] == "pickup"
+
+
+def test_model_emitted_user_name_takes_precedence_for_caller_display(client):
+    _completed_order(client, name="Office Reception", user_name="Anita")
+    assert client.get("/callers").json()[0]["name"] == "Anita"
+    session = client.get(
+        "/sessions", params={"user_id": "+915555555555"}
+    ).json()[0]
+    assert session["name"] == "Anita"
 
 
 def test_recent_orders_exposes_direct_chat_order(client):
