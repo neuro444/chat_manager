@@ -5,6 +5,8 @@ supplied by the voice channel (browser mic today, telephony webhook later).
 Staff read the dashboard; callers never see a screen.
 """
 import hmac
+import re
+from collections import defaultdict
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File
@@ -16,6 +18,7 @@ import config
 from providers import make_provider
 from service import handle_message
 from storage import make_repo
+from menu.loader import menu_items
 
 app = FastAPI(title="Chat Manager — Phone Ordering")
 
@@ -82,6 +85,75 @@ def _iso(v):
     return v if isinstance(v, str) else (v.isoformat() if v else None)
 
 
+def _usable_name(value) -> str:
+    """Return a model-emitted order name when it is suitable for staff UI."""
+    name = str(value or "").strip()
+    return "" if not name or name.lower() == "no_name_given" else name
+
+
+def _message_result(message) -> dict:
+    """Normalize the structured final result persisted on assistant messages."""
+    metadata = message.metadata or {}
+    response_fields = metadata.get("response_fields") or {}
+    order = metadata.get("order") or response_fields.get("order")
+    return {
+        "order_ready": bool(metadata.get("order_ready", response_fields.get("order_ready"))),
+        "order": order if isinstance(order, dict) else None,
+        "order_type": response_fields.get("order_type") or "",
+        "name": _usable_name(response_fields.get("name")),
+    }
+
+
+def _session_facts(repo, session) -> dict:
+    """Read the latest structured name/order emitted within one session."""
+    name = ""
+    completed = None
+    for message in reversed(repo.all_messages(session.session_id)):
+        if message.role != "assistant":
+            continue
+        result = _message_result(message)
+        order = result["order"]
+        candidate_name = result["name"] or _usable_name(
+            order.get("customer_name") if order else ""
+        )
+        if not name and candidate_name:
+            name = candidate_name
+        if completed is None and result["order_ready"] and order:
+            completed = {
+                "event": "order_ready",
+                "emitted_at": _iso(message.created_at),
+                "idempotency_key": session.session_id,
+                "call_uuid": session.session_id,
+                "user_id": session.user_id,
+                "session_id": session.session_id,
+                "order_type": result["order_type"] or order.get("fulfillment") or "pickup",
+                "name": candidate_name,
+                "channel": "chat",
+                "order": order,
+            }
+        if name and completed is not None:
+            break
+    if completed is not None and not completed["name"]:
+        completed["name"] = name
+    return {"name": name, "completed_order": completed}
+
+
+def _all_completed_orders(repo, limit: int = 200) -> list[dict]:
+    orders = []
+    for caller in repo.list_callers(limit=200):
+        for session in repo.list_sessions(caller["user_id"], limit=50):
+            completed = _session_facts(repo, session)["completed_order"]
+            if completed:
+                orders.append(completed)
+    orders.sort(key=lambda item: item.get("emitted_at") or "", reverse=True)
+    return orders[:limit]
+
+
+def _menu_id(category: str, name: str) -> str:
+    value = re.sub(r"[^a-z0-9]+", "-", f"{category}-{name}".lower()).strip("-")
+    return value or "menu-item"
+
+
 class ChatIn(BaseModel):
     user_id: str = "default"          # the caller's phone number
     session_id: str | None = None
@@ -112,7 +184,14 @@ def callers():
     out = []
     for r in repo.list_callers():
         user = repo.get_user(r["user_id"])
-        out.append({**r, "name": user.name if user else "",
+        resolved_name = ""
+        for session in repo.list_sessions(r["user_id"], limit=50):
+            resolved_name = _session_facts(repo, session)["name"]
+            if resolved_name:
+                break
+        if not resolved_name:
+            resolved_name = user.name if user else ""
+        out.append({**r, "name": _usable_name(resolved_name),
                     "last_active": _iso(r.get("last_active"))})
     return out
 
@@ -128,16 +207,110 @@ def delete_caller(user_id: str):
 def sessions(user_id: str = "default"):
     repo = get_repo()
     user_id = _caller(user_id)
-    return [
-        {
+    out = []
+    for s in repo.list_sessions(user_id):
+        facts = _session_facts(repo, s)
+        completed = facts["completed_order"]
+        out.append({
             "session_id": s.session_id,
             "title": s.title,
             "message_count": repo.session_message_count(s.session_id),
             "updated_at": _iso(s.updated_at),
             "running_summary": s.running_summary,
+            "name": facts["name"],
+            "order_type": completed["order_type"] if completed else "",
+        })
+    return out
+
+
+@app.get("/orders/recent", dependencies=[Depends(require_api_key)])
+def recent_orders(limit: int = 100):
+    """Completed structured orders from chat_manager, newest first."""
+    return {"orders": _all_completed_orders(get_repo(), max(1, min(limit, 500)))}
+
+
+@app.get("/menu", dependencies=[Depends(require_api_key)])
+def pickup_menu():
+    """Read-only pickup menu used by the dashboard.
+
+    Cake and catering intake is manager-led and intentionally has no menu here.
+    """
+    grouped = defaultdict(list)
+    for item in menu_items():
+        category = str(item.get("category") or "other")
+        grouped[category].append({
+            "id": _menu_id(category, str(item.get("name") or "item")),
+            "category": category,
+            "name": item.get("name") or "Item",
+            "price": f"{float(item.get('price') or 0):.2f}",
+        })
+    sections = [
+        {
+            "name": category,
+            "label": category.replace("_", " ").replace("-", " ").title(),
+            "items": items,
         }
-        for s in repo.list_sessions(user_id)
+        for category, items in sorted(grouped.items())
     ]
+    return {
+        "takeaway": {
+            "sections": sections,
+            "category_count": len(sections),
+            "item_count": sum(len(section["items"]) for section in sections),
+        },
+        "catering": {"sections": [], "category_count": 0, "item_count": 0},
+        "cakes": {"classes": [], "class_count": 0, "flavor_count": 0, "price_count": 0},
+        "read_only": True,
+    }
+
+
+@app.get("/crm/customers", dependencies=[Depends(require_api_key)])
+def crm_customers():
+    """Customer/order aggregates derived from persisted completed sessions."""
+    repo = get_repo()
+    orders_by_user = defaultdict(list)
+    for record in _all_completed_orders(repo, limit=500):
+        orders_by_user[record["user_id"]].append(record)
+
+    customers = []
+    for caller in repo.list_callers(limit=200):
+        user_id = caller["user_id"]
+        records = orders_by_user.get(user_id, [])
+        name = ""
+        for session in repo.list_sessions(user_id, limit=50):
+            name = _session_facts(repo, session)["name"]
+            if name:
+                break
+        history = []
+        spend = 0.0
+        for record in records:
+            order = record["order"]
+            total = float(order.get("total") or 0)
+            spend += total
+            history.append({
+                "type": record["order_type"],
+                "id": record["session_id"],
+                "status": "received",
+                "pickup_time": str(order.get("preparation_minutes") or ""),
+                "total": total,
+                "created_at": record["emitted_at"],
+                "items": [
+                    {"name": item.get("name") or "Item", "qty": item.get("quantity") or 1}
+                    for item in order.get("items") or []
+                ],
+            })
+        customers.append({
+            "id": user_id,
+            "name": name,
+            "phone": user_id,
+            "orders": len(records),
+            "spend": round(spend, 2),
+            "last_order": records[0]["emitted_at"] if records else "",
+            "diet": "",
+            "address": "",
+            "history": history,
+        })
+    return customers
 
 
 @app.get("/sessions/{session_id}/messages", dependencies=[Depends(require_api_key)])
