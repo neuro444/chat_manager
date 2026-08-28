@@ -237,6 +237,7 @@ class SQLiteStore:
         ).fetchone()["n"]
 
     def search_messages(self, user_id, query, exclude_session, limit):
+        user_filter = "AND s.user_id = ?" if user_id else ""
         try:
             from storage.typesense_search import get_search, TypesenseUnavailable, TypesenseNotConfigured
             ids = get_search().search_message_ids(user_id, query, limit)
@@ -247,13 +248,15 @@ class SQLiteStore:
                     SELECT m.* FROM messages m
                     JOIN sessions s ON s.session_id = m.session_id
                     WHERE m.message_id IN ({placeholders})
-                      AND s.user_id = ?
+                      {user_filter}
                       AND m.session_id != ?
                       AND m.role = 'user'
                     """,
-                    (*ids, user_id, exclude_session),
+                    ((*ids, user_id, exclude_session) if user_id
+                     else (*ids, exclude_session)),
                 ).fetchall()
-                return [self._row_to_message(r) for r in rows]
+                if rows:
+                    return [self._row_to_message(r) for r in rows]
         except (TypesenseUnavailable, TypesenseNotConfigured):
             pass  # fall back to FTS5 below
 
@@ -261,17 +264,18 @@ class SQLiteStore:
         if not match:
             return []
         rows = self.conn.execute(
-            """
+            f"""
             SELECT m.* FROM messages_fts f
             JOIN messages m ON m.message_id = f.message_id
             JOIN sessions s ON s.session_id = m.session_id
             WHERE messages_fts MATCH ?
-              AND s.user_id = ?
+              {user_filter}
               AND m.session_id != ?
               AND m.role = 'user'
             ORDER BY rank LIMIT ?
             """,
-            (match, user_id, exclude_session, limit),
+            ((match, user_id, exclude_session, limit) if user_id
+             else (match, exclude_session, limit)),
         ).fetchall()
         return [self._row_to_message(r) for r in rows]
 

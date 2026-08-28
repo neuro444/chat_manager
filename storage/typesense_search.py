@@ -96,7 +96,7 @@ class TypesenseSearch:
                 params={
                     "q": query,
                     "query_by": "content",
-                    "filter_by": f"user_id:={user_id} && role:=user",
+                    "filter_by": f"user_id:={user_id} && role:=user" if user_id else "role:=user",
                     "per_page": limit,
                     "num_typos": 2,
                     "prefix": True,

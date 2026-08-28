@@ -117,9 +117,9 @@ def delete(session_id: str):
 
 
 @app.get("/search")
-def search(user_id: str, q: str):
-    """Search a caller's past conversations; returns a preview per hit."""
-    hits = get_repo().search_messages(_caller(user_id), q, "", 20)
+def search(q: str, user_id: str = ""):
+    """Search past conversations. With user_id, scoped to that caller; without, across all callers."""
+    hits = get_repo().search_messages(_caller(user_id) if user_id else "", q, "", 20)
     return [
         {"session_id": h.session_id, "preview": h.content[:160],
          "created_at": _iso(h.created_at)}
