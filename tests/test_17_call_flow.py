@@ -246,7 +246,7 @@ def test_cake_and_catering_callback_is_a_multi_turn_conversation():
     assert "requirements include a question; continue instead of handing off" in SYSTEM_PROMPT
     assert "What name should I include" in SYSTEM_PROMPT
     assert "most recent same-number order/callback context" in SYSTEM_PROMPT
-    assert "do not ask for it again" in SYSTEM_PROMPT
+    assert "do not ask another name question" in SYSTEM_PROMPT
     assert "Never choose an older" in SYSTEM_PROMPT
     assert "Aim for one or two useful" in SYSTEM_PROMPT
     assert "Do not repeat the same missing-detail question" in SYSTEM_PROMPT
@@ -258,15 +258,31 @@ def test_prompt_resolves_name_before_greeting_and_gates_ambiguous_handoffs():
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "NAME RESOLUTION PRECEDENCE — APPLY BEFORE THE FIRST REPLY" in prompt
-    assert "current-session summary" in prompt
+    assert "latest caller-authored transcript evidence is authoritative" in prompt
     assert "never infer a name from the phone number alone" in prompt
+    assert "CALLER'S OWN transcript text" in prompt
+    assert "Assistant-written text is never name evidence" in prompt
+    assert "structured `caller name`/`user_name` fact" in prompt
     assert "Use the same resolved name consistently in the greeting" in prompt
     assert "Emit the same name on every later turn" in prompt
+    assert "name-question opportunity is spent" in prompt
+    assert "scan the current transcript for any earlier assistant name question" in prompt
     assert "CALLBACK-NAME GATE" in prompt
-    assert "two or more different real names" in prompt
+    assert "two or more caller-supported real names" in prompt
     assert "Do not set To_manager=true" in prompt
     assert "CONFLICTING FAMILY NAMES REQUIRE A CALLBACK NAME" in prompt
     assert "MOST RECENT APPLICABLE DATED NAME AT GREETING" in prompt
+    assert "ASSISTANT-SPOKEN NAME IS NOT CALLER EVIDENCE" in prompt
+
+
+def test_summarizer_preserves_name_question_state_without_inventing_identity():
+    from prompts import SUMMARIZER_PROMPT
+    prompt = " ".join(SUMMARIZER_PROMPT.split())
+
+    assert "caller's own message explicitly stated or corrected it" in prompt
+    assert "Never infer a caller name from the assistant's greeting" in prompt
+    assert "assistant asked for an order or callback name" in prompt
+    assert "does not ask again later in the same call" in prompt
 
 
 def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):
