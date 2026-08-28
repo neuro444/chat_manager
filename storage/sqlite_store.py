@@ -196,10 +196,26 @@ class SQLiteStore:
             "UPDATE sessions SET updated_at=? WHERE session_id=?", (now, session_id)
         )
         self.conn.commit()
-        return Message(
+        m = Message(
             message_id=mid, session_id=session_id, seq=seq, role=role,
             content=content, tokens=len(content) // 4, metadata=metadata or {},
         )
+        try:
+            from storage.typesense_search import get_search
+            user_id = self.conn.execute(
+                "SELECT user_id FROM sessions WHERE session_id=?", (session_id,)
+            ).fetchone()["user_id"]
+            get_search().index_message({
+                "message_id": m.message_id,
+                "session_id": m.session_id,
+                "user_id": user_id,
+                "role": m.role,
+                "content": m.content,
+                "created_at": int(m.created_at.timestamp()),
+            })
+        except Exception:
+            pass  # indexing is best-effort; never block a write
+        return m
 
     def recent_messages(self, session_id, limit):
         rows = self.conn.execute(
@@ -221,6 +237,26 @@ class SQLiteStore:
         ).fetchone()["n"]
 
     def search_messages(self, user_id, query, exclude_session, limit):
+        try:
+            from storage.typesense_search import get_search, TypesenseUnavailable, TypesenseNotConfigured
+            ids = get_search().search_message_ids(user_id, query, limit)
+            if ids:
+                placeholders = ",".join("?" for _ in ids)
+                rows = self.conn.execute(
+                    f"""
+                    SELECT m.* FROM messages m
+                    JOIN sessions s ON s.session_id = m.session_id
+                    WHERE m.message_id IN ({placeholders})
+                      AND s.user_id = ?
+                      AND m.session_id != ?
+                      AND m.role = 'user'
+                    """,
+                    (*ids, user_id, exclude_session),
+                ).fetchall()
+                return [self._row_to_message(r) for r in rows]
+        except (TypesenseUnavailable, TypesenseNotConfigured):
+            pass  # fall back to FTS5 below
+
         match = _fts_query(query)
         if not match:
             return []
