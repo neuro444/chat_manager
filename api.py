@@ -127,6 +127,23 @@ def search(q: str, user_id: str = ""):
     ]
 
 
+@app.get("/menu/search")
+def menu_search(q: str):
+    """Search menu items by name via Typesense."""
+    import os, httpx
+    from storage.typesense_search import TypesenseConfig
+    try:
+        base = TypesenseConfig.from_environment()
+        collection = os.getenv("TYPESENSE_MENU_COLLECTION", "menu")
+        with httpx.Client(base_url=base.url, headers={"X-TYPESENSE-API-KEY": base.api_key}, timeout=5.0) as client:
+            r = client.get(f"/collections/{collection}/documents/search",
+                           params={"q": q, "query_by": "name", "num_typos": 2, "prefix": True, "per_page": 50})
+            r.raise_for_status()
+            return [hit["document"] for hit in r.json().get("hits", [])]
+    except Exception:
+        return []
+
+
 # ── voice ────────────────────────────────
 @app.post("/stt")
 async def stt(file: UploadFile = File(...)):
