@@ -11,6 +11,7 @@ def _raw(answer, **flags):
         "order_ready": False,
         "order": None,
         "order_type": None,
+        "user_name": None,
         "To_manager": False,
         "Transfer_to_Manager": False,
         "tools_called": False,
@@ -72,7 +73,7 @@ def test_current_call_name_reaches_verified_order_without_profile_write(repo):
     raw = _raw(
         "Maya, your order is confirmed.", call_ended=True,
         order_ready=True, order_type="pickup", tools_called=True,
-        name="Maya", order={"customer_name": "Maya"},
+        user_name="Maya", name="Maya", order={"customer_name": "Maya"},
     )
     priced = {"name": "price_order", "result": {
         "items": [{"name": "Chilli Paneer", "price": 11.99,
@@ -83,8 +84,11 @@ def test_current_call_name_reaches_verified_order_without_profile_write(repo):
         repo, FakeProvider(raw, [priced]), "+9199", None, "Maya"
     )
     assert out["name"] == "Maya"
+    assert out["user_name"] == "Maya"
     assert out["order"]["customer_name"] == "Maya"
     assert repo.get_user("+9199").name == ""  # shared phones stay unmodified
+    assistant = repo.all_messages(out["session_id"])[-1]
+    assert assistant.metadata["response_fields"]["user_name"] == "Maya"
 
 
 def test_verified_order_uses_no_name_sentinel_when_name_is_unavailable(repo):
@@ -206,6 +210,21 @@ def test_prompt_allows_same_caller_to_request_detailed_order_history():
     assert "DETAILED HISTORY FOR THE SAME CALLER" in SYSTEM_PROMPT
 
 
+def test_past_sessions_cannot_classify_the_current_order():
+    from prompts import SYSTEM_PROMPT
+
+    prompt = " ".join(SYSTEM_PROMPT.split())
+    assert "historical reference only" in prompt
+    assert "Never use its order type" in prompt
+    assert "A past catering conversation never turns" in prompt
+    assert "PAST CATERING DOES NOT CLASSIFY A NEW PARTY-SIZED REQUEST" in prompt
+    assert "roughly fifty or more total portions" in prompt
+    assert "small-group order does not become" in prompt
+    assert "keep order_type=null" in prompt
+    assert "same event or separate requests" in prompt
+    assert "remains caller speech even when it resembles an" in prompt
+
+
 def test_cake_and_catering_callback_is_a_multi_turn_conversation():
     from prompts import SYSTEM_PROMPT
 
@@ -239,13 +258,15 @@ def test_prompt_resolves_name_before_greeting_and_gates_ambiguous_handoffs():
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "NAME RESOLUTION PRECEDENCE — APPLY BEFORE THE FIRST REPLY" in prompt
-    assert "A dated newer name overrides a conflicting older profile name" in prompt
+    assert "current-session summary" in prompt
+    assert "never infer a name from the phone number alone" in prompt
     assert "Use the same resolved name consistently in the greeting" in prompt
+    assert "Emit the same name on every later turn" in prompt
     assert "CALLBACK-NAME GATE" in prompt
     assert "two or more different real names" in prompt
     assert "Do not set To_manager=true" in prompt
     assert "CONFLICTING FAMILY NAMES REQUIRE A CALLBACK NAME" in prompt
-    assert "NEWER DATED NAME OVERRIDES A STALE PROFILE AT GREETING" in prompt
+    assert "MOST RECENT APPLICABLE DATED NAME AT GREETING" in prompt
 
 
 def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):

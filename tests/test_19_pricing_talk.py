@@ -30,18 +30,26 @@ def test_prompt_defaults_pickup_readiness_and_routes_large_orders():
 
 
 def test_prompt_contains_business_hours_and_closed_order_timing():
-    p = SYSTEM_PROMPT.lower()
+    p = " ".join(SYSTEM_PROMPT.lower().split())
     assert "sunday through saturday" in p
     assert "11:00 am to 11:00 pm" in p
-    assert "business-hours finalization gate" in p
-    assert "caller never asks about hours" in p
-    assert "before calling price_order" in p
-    assert "do not guess the current local time" in p
-    assert "when reliable time is unavailable" in p
-    assert "processing when it opens" in p
+    assert "missing current-time context alone is not a reason" in p
+    assert "do not add an hours question" in p
+    assert "if it shows the restaurant is closed" in p
+    assert "processed when the restaurant opens" in p
     assert "twenty to thirty minutes after preparation starts" in p
-    assert "proactive closed-hours check at finalization" in p
     assert "hours-only conversation has call_ended=true" in p
+
+
+def test_prompt_has_one_review_and_small_orders_do_not_trigger_catering():
+    p = " ".join(SYSTEM_PROMPT.lower().split())
+    assert "once the caller answers that review, never ask an equivalent" in p
+    assert "fulfillment does not reset it" in p
+    assert "small-group order does not become catering" in p
+    assert "five chicken fried rice and three porottas" in p
+    assert "does not introduce business hours" in p
+    assert "fulfillment does not repeat the pickup review" in p
+    assert "three kandari chicken fry" in p
 
 
 def test_prompt_reads_large_totals_as_thousands_and_dollars():
@@ -55,9 +63,10 @@ def test_prompt_requires_unit_prices_in_the_readback():
     assert "unit price" in SYSTEM_PROMPT.lower()
 
 
-def test_prompt_forbids_volunteering_tax():
+def test_prompt_makes_tax_inclusive_total_clear_without_breakdown():
     p = SYSTEM_PROMPT.lower()
-    assert "tax" in p and "unless" in p
+    assert "total, including tax" in p
+    assert "do not read the separate tax" in p
 
 
 def test_price_order_still_returns_line_items_for_the_readback():

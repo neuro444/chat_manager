@@ -88,3 +88,96 @@ def test_search_handles_plus_prefixed_numbers(client):
     client.post("/chat", json={"user_id": phone, "message": "mutton rogan josh"})
     hits = client.get(f"/search?user_id={phone}&q=mutton").json()
     assert hits
+
+
+def _completed_order(client, phone="+915555555555", name="Anita", user_name=None):
+    import api
+
+    repo = api.get_repo()
+    repo.ensure_user(phone)
+    session = repo.create_session(phone, "pickup order")
+    repo.append_message(session.session_id, "user", "one chilli paneer")
+    repo.append_message(
+        session.session_id,
+        "assistant",
+        "Your order is confirmed.",
+        metadata={
+            "order_ready": True,
+            "order": {
+                "customer_name": name,
+                "fulfillment": "pickup",
+                "items": [{
+                    "name": "Chilli Paneer", "quantity": 1,
+                    "unit_price": "11.99", "line_total": "11.99",
+                }],
+                "subtotal": "11.99", "tax": "0.93", "total": "12.92",
+                "preparation_minutes": "20-30",
+            },
+            "response_fields": {
+                "user_name": user_name or name,
+                "name": name,
+                "order_type": "pickup",
+                "call_ended": True,
+            },
+        },
+    )
+    return session.session_id
+
+
+def test_sessions_and_callers_use_structured_emitted_name(client):
+    sid = _completed_order(client, name="Anita")
+    assert client.get("/callers").json()[0]["name"] == "Anita"
+    session = client.get("/sessions", params={"user_id": "+915555555555"}).json()[0]
+    assert session["session_id"] == sid
+    assert session["name"] == "Anita"
+    assert session["order_type"] == "pickup"
+
+
+def test_model_emitted_user_name_takes_precedence_for_caller_display(client):
+    _completed_order(client, name="Office Reception", user_name="Anita")
+    assert client.get("/callers").json()[0]["name"] == "Anita"
+    session = client.get(
+        "/sessions", params={"user_id": "+915555555555"}
+    ).json()[0]
+    assert session["name"] == "Anita"
+
+
+def test_recent_orders_exposes_direct_chat_order(client):
+    sid = _completed_order(client)
+    orders = client.get("/orders/recent").json()["orders"]
+    assert len(orders) == 1
+    assert orders[0]["session_id"] == sid
+    assert orders[0]["channel"] == "chat"
+    assert orders[0]["order"]["total"] == "12.92"
+
+
+def test_pickup_menu_is_read_only_and_omits_cake_and_catering(client):
+    menu = client.get("/menu").json()
+    assert menu["read_only"] is True
+    assert menu["takeaway"]["item_count"] > 0
+    assert menu["catering"]["item_count"] == 0
+    assert menu["cakes"]["flavor_count"] == 0
+
+
+def test_crm_is_aggregated_from_completed_sessions(client):
+    sid = _completed_order(client, name="Anita")
+    customers = client.get("/crm/customers").json()
+    assert customers == [{
+        "id": "+915555555555",
+        "name": "Anita",
+        "phone": "+915555555555",
+        "orders": 1,
+        "spend": 12.92,
+        "last_order": customers[0]["last_order"],
+        "diet": "",
+        "address": "",
+        "history": [{
+            "type": "pickup",
+            "id": sid,
+            "status": "received",
+            "pickup_time": "20-30",
+            "total": 12.92,
+            "created_at": customers[0]["history"][0]["created_at"],
+            "items": [{"name": "Chilli Paneer", "qty": 1}],
+        }],
+    }]

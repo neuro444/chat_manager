@@ -90,6 +90,17 @@ def test_prior_calls_include_dates_and_both_sides_of_name_exchange(store):
     assert "caller: Sri Krishna" in blob
 
 
+def test_model_emitted_user_name_propagates_through_dated_memory(store):
+    sid = store.create_session("+1445").session_id
+    store.append_message(
+        sid, "assistant", "How can I help?",
+        metadata={"response_fields": {"user_name": "Anita"}},
+    )
+    current = store.create_session("+1445").session_id
+    memory = build_memory_context(store, "+1445", "hello", current)
+    assert "caller name: Anita" in memory
+
+
 def test_cross_session_context_is_capped_at_configured_message_window(store):
     sid = store.create_session("+1555").session_id
     for index in range(config.CROSS_SESSION_MESSAGE_WINDOW + 10):
