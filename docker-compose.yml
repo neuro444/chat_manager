@@ -15,6 +15,8 @@ services:
       - "127.0.0.1:${CHAT_MANAGER_PORT:-8000}:8000"
     volumes:
       - chat_manager_data:/data
+    depends_on:
+      - typesense
     healthcheck:
       test:
         - CMD
@@ -26,5 +28,16 @@ services:
       retries: 3
       start_period: 20s
 
+  typesense:
+    image: typesense/typesense:0.25.2
+    container_name: chat-manager-typesense
+    restart: unless-stopped
+    command: '--data-dir /data --api-key=${TYPESENSE_API_KEY:-localdevkey} --enable-cors'
+    ports:
+      - "127.0.0.1:8108:8108"
+    volumes:
+      - typesense_data:/data
+
 volumes:
   chat_manager_data:
+  typesense_data:
