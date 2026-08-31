@@ -5,8 +5,10 @@ supplied by the voice channel (browser mic today, telephony webhook later).
 Staff read the dashboard; callers never see a screen.
 """
 import hmac
+import logging
 import re
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File
@@ -20,7 +22,34 @@ from service import handle_message
 from storage import make_repo
 from menu.loader import menu_items
 
-app = FastAPI(title="Chat Manager — Phone Ordering")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("chat_manager.api")
+
+
+def check_api_key_configuration() -> bool:
+    """Check whether API key authentication is enabled and log appropriate status.
+
+    Returns True if API_KEY is set and active, False otherwise.
+    """
+    if config.API_KEY:
+        logger.info("API key authentication is ENABLED (X-API-Key required for guarded endpoints)")
+        return True
+    else:
+        logger.warning(
+            "SECURITY WARNING: API_KEY is not set — API key authentication is DISABLED. "
+            "All endpoints are publicly accessible without authentication. "
+            "Set API_KEY in your production environment (.env) to enforce access control."
+        )
+        return False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    check_api_key_configuration()
+    yield
+
+
+app = FastAPI(title="Chat Manager — Phone Ordering", lifespan=lifespan)
 
 # Allows the voice_central dashboard (browser JS on a different origin)
 # to call this API directly. telephony calls chat_manager server-to-server

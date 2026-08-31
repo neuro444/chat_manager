@@ -78,3 +78,23 @@ def test_auth_disabled_when_key_unset(client, monkeypatch):
     assert client.post(
         "/chat", json={"user_id": "+15551234567", "message": "hi"}
     ).status_code == 200
+
+
+def test_startup_check_logs_warning_when_key_unset(caplog, monkeypatch):
+    import api
+    import logging
+    monkeypatch.setattr(config, "API_KEY", "")
+    with caplog.at_level(logging.WARNING):
+        is_enabled = api.check_api_key_configuration()
+        assert not is_enabled
+        assert any("SECURITY WARNING: API_KEY is not set" in record.message for record in caplog.records)
+
+
+def test_startup_check_logs_info_when_key_set(caplog, monkeypatch):
+    import api
+    import logging
+    monkeypatch.setattr(config, "API_KEY", "s3cret-token-1234")
+    with caplog.at_level(logging.INFO):
+        is_enabled = api.check_api_key_configuration()
+        assert is_enabled
+        assert any("API key authentication is ENABLED" in record.message for record in caplog.records)

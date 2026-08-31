@@ -17,6 +17,13 @@ def provider():
     return FakeProvider()
 
 
+@pytest.fixture(autouse=True)
+def _clean_api_key(monkeypatch):
+    """Ensure tests run against unkeyed baseline by default even if .env has API_KEY set."""
+    import config
+    monkeypatch.setattr(config, "API_KEY", "")
+
+
 @pytest.fixture
 def sqlite_repo(tmp_path):
     """A real SQLite DB in a temp dir, destroyed after the test."""
