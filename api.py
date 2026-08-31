@@ -409,3 +409,7 @@ def appjs():
 @app.get("/style.css")
 def appcss():
     return FileResponse(WEB / "style.css", media_type="text/css")
+
+
+import cost_proxy
+app.include_router(cost_proxy.router)

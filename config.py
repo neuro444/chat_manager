@@ -82,6 +82,7 @@ ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_v3")
 # ── Server ────────────────────────────
 HOST = os.getenv("HOST", "127.0.0.1")
 PORT = _int("PORT", 8000)
+COST_API_URL = os.getenv("COST_API_URL", "http://127.0.0.1:8005")
 
 # ── API auth ──────────────────────────
 # Shared secret the telephony gateway sends on every request. When empty,
