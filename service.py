@@ -29,10 +29,7 @@ def _debug(msg: str) -> None:
         print(msg, flush=True)
 
 
-def build_context(
-    repo, user_id: str, session_id: str, user_message: str,
-    channel: str = "voice", is_first_turn: bool = False,
-) -> list[dict]:
+def build_context(repo, user_id: str, session_id: str, user_message: str) -> list[dict]:
     """Assemble the full prompt for a turn. Exposed so /context can inspect it."""
     session = repo.get_session(session_id)
     entities = resolve_active_entities(repo, session_id, user_message)
@@ -56,8 +53,6 @@ def build_context(
         memory=memory,
         profile=profile,
         domain=format_menu_for_prompt(),
-        channel=channel,
-        is_first_turn=is_first_turn,
     )
 
 
@@ -78,7 +73,7 @@ def resolve_session(
     return repo.create_session(user_id).session_id
 
 
-def _start_turn(repo, user_id, session_id, user_message, new_session=False, channel="voice"):
+def _start_turn(repo, user_id, session_id, user_message, new_session=False):
     """Shared prologue: resolve session, persist the user turn, build context."""
     repo.ensure_user(user_id)
     session_id = resolve_session(repo, user_id, session_id, new_session=new_session)
@@ -86,10 +81,7 @@ def _start_turn(repo, user_id, session_id, user_message, new_session=False, chan
     # persist the user turn BEFORE calling the LLM, so a failure mid-call never
     # loses what the user typed
     repo.append_message(session_id, "user", user_message)
-    messages = build_context(
-        repo, user_id, session_id, user_message,
-        channel=channel, is_first_turn=is_first_turn,
-    )
+    messages = build_context(repo, user_id, session_id, user_message)
     if config.DEBUG_CONTEXT:
         from context.debug import print_context_report
         print_context_report(repo, user_id, session_id, user_message)
@@ -259,8 +251,7 @@ def handle_message(
 ):
     """Run one full turn and return {"answer", "session_id"}."""
     session_id, is_first, messages = _start_turn(
-        repo, user_id, session_id, user_message,
-        new_session=new_session, channel=channel,
+        repo, user_id, session_id, user_message, new_session=new_session
     )
     input_tokens = tokens.count_messages(messages)
     print(f"[llm_call_start] session_id={session_id} "
@@ -293,6 +284,14 @@ def handle_message(
     to_manager = parsed["To_manager"]
     extensions = _response_extensions(parsed)
     answer = parsed["answer"]
+    # Prepended deterministically, not left to the LLM to include on its own --
+    # a system-message instruction was tested and found unreliable (dropped on
+    # some turns when the model had more to compose, e.g. resolving a name at
+    # the same time). Voice-only, greeting-turn-only: consent/wiretapping law
+    # concerns recorded calls, not text channels, so this must never leak into
+    # WhatsApp or other non-voice channels regardless of the flag.
+    if channel == "voice" and is_first and config.DISCLOSURE_ENABLED:
+        answer = f"{config.DISCLOSURE_LINE} {answer}"
     llm_debug = _llm_debug_payload(messages, raw)
     tts_chars = tokens.count_tts_chars(answer)
     _finish_turn(

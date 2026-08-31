@@ -5,7 +5,6 @@ Two invariants this module must never break:
   - the system prompt is first
   - the current user message is last and is never trimmed
 """
-import config
 from config import (
     CHARS_PER_TOKEN,
     CONTEXT_BUDGET_WEIGHTS,
@@ -45,8 +44,6 @@ def assemble(
     memory: str = "",
     profile: str = "",
     domain: str = "",
-    channel: str = "voice",
-    is_first_turn: bool = False,
 ) -> list[dict]:
     """Build the message array sent to the LLM."""
     history = history or []
@@ -84,18 +81,6 @@ def assemble(
         blocks.append(f"## Reference data\n{domain_text}")
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    # Call-recording disclosure is voice-only (wiretapping/consent law governs
-    # recorded calls, not text messages) and only needed on the greeting turn
-    # that opens each call, not on every subsequent turn.
-    if channel == "voice" and is_first_turn and config.DISCLOSURE_ENABLED:
-        messages.append({
-            "role": "system",
-            "content": (
-                "CALL DISCLOSURE: begin this greeting with exactly this "
-                f'sentence, spoken naturally, before anything else: '
-                f'"{config.DISCLOSURE_LINE}"'
-            ),
-        })
     if blocks:
         messages.append(
             {"role": "system", "content": _CONTEXT_HEADER + "\n\n" + "\n\n".join(blocks)}
