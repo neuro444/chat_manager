@@ -89,3 +89,12 @@ PORT = _int("PORT", 8000)
 # unaffected; set it in production, where the API is reachable over the network.
 API_KEY = os.getenv("API_KEY", "")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
+
+# ── Call disclosure ───────────────────
+# Voice-only (see context/assembler.py). Off by default so existing behavior
+# and SYSTEM_PROMPT-based tests are unaffected until explicitly enabled.
+DISCLOSURE_ENABLED = os.getenv("DISCLOSURE_ENABLED", "false").lower() in ("1", "true", "yes")
+DISCLOSURE_LINE = os.getenv(
+    "DISCLOSURE_LINE",
+    "This call may be recorded and processed by our ordering assistant.",
+)

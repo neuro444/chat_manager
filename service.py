@@ -29,7 +29,10 @@ def _debug(msg: str) -> None:
         print(msg, flush=True)
 
 
-def build_context(repo, user_id: str, session_id: str, user_message: str) -> list[dict]:
+def build_context(
+    repo, user_id: str, session_id: str, user_message: str,
+    channel: str = "voice", is_first_turn: bool = False,
+) -> list[dict]:
     """Assemble the full prompt for a turn. Exposed so /context can inspect it."""
     session = repo.get_session(session_id)
     entities = resolve_active_entities(repo, session_id, user_message)
@@ -53,6 +56,8 @@ def build_context(repo, user_id: str, session_id: str, user_message: str) -> lis
         memory=memory,
         profile=profile,
         domain=format_menu_for_prompt(),
+        channel=channel,
+        is_first_turn=is_first_turn,
     )
 
 
@@ -73,7 +78,7 @@ def resolve_session(
     return repo.create_session(user_id).session_id
 
 
-def _start_turn(repo, user_id, session_id, user_message, new_session=False):
+def _start_turn(repo, user_id, session_id, user_message, new_session=False, channel="voice"):
     """Shared prologue: resolve session, persist the user turn, build context."""
     repo.ensure_user(user_id)
     session_id = resolve_session(repo, user_id, session_id, new_session=new_session)
@@ -81,7 +86,10 @@ def _start_turn(repo, user_id, session_id, user_message, new_session=False):
     # persist the user turn BEFORE calling the LLM, so a failure mid-call never
     # loses what the user typed
     repo.append_message(session_id, "user", user_message)
-    messages = build_context(repo, user_id, session_id, user_message)
+    messages = build_context(
+        repo, user_id, session_id, user_message,
+        channel=channel, is_first_turn=is_first_turn,
+    )
     if config.DEBUG_CONTEXT:
         from context.debug import print_context_report
         print_context_report(repo, user_id, session_id, user_message)
@@ -247,11 +255,12 @@ def _build_ready_order(provider, requested: bool, customer_name=None):
 
 def handle_message(
     repo, provider, user_id, session_id, user_message, include_llm_debug=False,
-    new_session=False,
+    new_session=False, channel="voice",
 ):
     """Run one full turn and return {"answer", "session_id"}."""
     session_id, is_first, messages = _start_turn(
-        repo, user_id, session_id, user_message, new_session=new_session
+        repo, user_id, session_id, user_message,
+        new_session=new_session, channel=channel,
     )
     input_tokens = tokens.count_messages(messages)
     print(f"[llm_call_start] session_id={session_id} "

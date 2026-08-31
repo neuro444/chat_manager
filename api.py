@@ -162,6 +162,7 @@ class ChatIn(BaseModel):
     message: str
     include_llm_debug: bool = False
     new_session: bool = False
+    channel: str = "voice"             # "voice" | "whatsapp" — gates call-only behavior (e.g. disclosure)
 
 
 @app.get("/health")
@@ -176,7 +177,7 @@ def chat(body: ChatIn):
     return handle_message(get_repo(), get_provider(),
                           _caller(body.user_id), body.session_id, body.message,
                           include_llm_debug=body.include_llm_debug,
-                          new_session=body.new_session)
+                          new_session=body.new_session, channel=body.channel)
 
 
 @app.get("/callers", dependencies=[Depends(require_api_key)])
