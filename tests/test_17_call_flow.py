@@ -233,7 +233,7 @@ def test_cake_and_catering_callback_is_a_multi_turn_conversation():
     assert "If you share the details with me" in SYSTEM_PROMPT
     assert "May I have the order details, please?" in SYSTEM_PROMPT
     assert "your requirements?" in SYSTEM_PROMPT
-    assert "EVERY cake, catering, or combined inquiry" in SYSTEM_PROMPT
+    assert "factual cake-flavor question is not yet an order or handoff" in SYSTEM_PROMPT
     assert "do not take cake orders" not in SYSTEM_PROMPT
     assert "do not take catering orders" not in SYSTEM_PROMPT
     assert "discussion for as many turns as needed" in SYSTEM_PROMPT
@@ -251,6 +251,32 @@ def test_cake_and_catering_callback_is_a_multi_turn_conversation():
     assert "Aim for one or two useful" in SYSTEM_PROMPT
     assert "Do not repeat the same missing-detail question" in SYSTEM_PROMPT
     assert "unclear speech does not become an interrogation" in SYSTEM_PROMPT
+
+
+def test_prompt_uses_known_cake_flavors_without_starting_handoff():
+    from prompts import SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+
+    assert 'The "Cake flavours" line in reference data is a known menu list' in prompt
+    assert "Mention only two or three flavors at a time" in prompt
+    assert "keep To_manager=false and call_ended=false" in prompt
+    assert "What cake flavors do you have?" in prompt
+    assert "Black Forest, Choco-Mousse, and Mango" in prompt
+    assert "Preserve every flavor's exact menu spelling" in prompt
+    assert "You do not have cake flavors" not in prompt
+
+
+def test_prompt_disambiguates_all_first_mention_matches_and_recovers_repeats():
+    from prompts import SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+
+    assert "compare the caller's words with ALL matching menu names" in prompt
+    assert "If two or more real menu items match" in prompt
+    assert "Offer two or three matching options at a time" in prompt
+    assert "I'd like the Kandari" in prompt
+    assert "Kandari Paneer, Kandari Tawa Fish, and Kandari Chicken Fry" in prompt
+    assert "REPEATED QUESTIONS" in prompt
+    assert "previous answer did not resolve it" in prompt
 
 
 def test_prompt_resolves_name_before_greeting_and_gates_ambiguous_handoffs():
