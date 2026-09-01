@@ -1,0 +1,150 @@
+Reduce agent_prompt.md
+Most of agent_prompt.md is redundant if the external Restaurant repository will call this Chat Manager API. There should be only one conversational-policy owner: chat_manager_repo/prompts.py.
+Remove from agent_prompt.md
+These are already handled inside Chat Manager and should not be repeated externally:
+Assistant persona and speaking style
+Menu injection and menu browsing
+Item matching and ambiguity handling
+Conversation history and summaries
+User-name memory
+Cross-session preferences
+Pickup-versus-delivery conversation
+Cake and catering intake
+Order quantity changes and removals
+Pricing rules
+Large-order/catering detection
+Final response JSON rules
+Mixed-request conversation policy
+Prompt-injection and conversation guardrails
+“Required Python Integration” that constructs model context
+Instructions to inject menu, history, tool schemas, and conversation state
+The external repository should not create an LLM prompt containing:
+agent_prompt.md
++ runtime state
++ menu
++ tools
++ history
+Chat Manager already assembles:
+SYSTEM_PROMPT
++ user profile
++ previous-session memory
++ rolling summary
++ current history
++ menu
++ current message
+Maintaining both prompts will eventually produce conflicting behavior.
+Read in detail to edit the restaurant repo
+-------------------------------------------
+Keep in the external phone repository
+Only phone-channel orchestration belongs there:
+caller audio
+    → speech recognition
+    → Chat Manager POST /chat
+    → JSON response
+    → speak JSON.answer
+    → perform actions from JSON flags
+The external phone repository should own:
+- Provider webhook verification
+- Incoming-call acceptance
+- Call ID and caller identity
+- Audio input and output
+- Speech recognition
+- Text-to-speech
+- Silence detection
+- Barge-in/interruption handling
+- Hold behavior
+- Human transfer
+- Physical call termination
+- Mapping provider call ID to Chat Manager session_id
+- Actual order submission
+- Actual manager notification
+- Idempotency so actions happen once
+Mandatory phone functions
+A minimal external adapter needs functions equivalent to:
+def start_call(provider_call_id: str, caller_id: str) -> CallState:
+    """Create call state with session_id=None."""
+def receive_speech(audio) -> str:
+    """Convert caller audio into a finalized transcript."""
+def send_chat_turn(
+    user_id: str,
+    session_id: str | None,
+    message: str,
+) -> dict:
+    """POST the transcript to Chat Manager /chat."""
+def speak_answer(call_id: str, answer: str) -> None:
+    """Convert and play only response['answer']."""
+def save_session_mapping(call_id: str, session_id: str) -> None:
+    """Reuse the Chat Manager session throughout the call."""
+def submit_order_once(call_id: str, order: dict) -> None:
+    """Submit a completed pickup order exactly once."""
+def create_manager_handoff_once(
+    call_id: str,
+    summary: str,
+    verbatim_user_chat: list[str],
+) -> None:
+    """Notify the manager exactly once."""
+def transfer_to_human(call_id: str) -> TransferResult:
+    """Ask the phone provider to transfer the active call."""
+def end_call(call_id: str, delay_seconds: int = 0) -> None:
+    """Hang up after final speech finishes."""
+Per-turn processing
+result = send_chat_turn(
+    user_id=caller_id,
+    session_id=call_state.session_id,
+    message=transcript,
+)
+
+call_state.session_id = result["session_id"]
+
+speak_answer(call_id, result["answer"])
+
+if result["To_manager"]:
+    create_manager_handoff_once(
+        call_id,
+        result["summary"],
+        result["verbatim_user_chat"],
+    )
+
+if result["order_placed"]:
+    submit_order_once(call_id, result["order"])
+
+if result["call_ended"]:
+    end_call(call_id, result["end_delay_seconds"])
+Current integration gap
+The current Chat Manager response does not include a structured order object:
+{
+  "answer": "...",
+  "order_placed": true
+}
+That is insufficient for actual order submission. The external repository should not parse items and totals from answer.
+Chat Manager should eventually return:
+{
+  "answer": "Your order is confirmed...",
+  "session_id": "...",
+  "call_ended": true,
+  "order_placed": true,
+  "To_manager": false,
+  "tools_called": true,
+  "order": {
+    "customer_name": "Priya",
+    "fulfillment": "pickup",
+    "items": [
+      {
+        "name": "Veg Biriyani",
+        "quantity": 3,
+        "unit_price": "13.99",
+        "line_total": "41.97"
+      }
+    ],
+    "subtotal": "41.97",
+    "tax": "3.25",
+    "total": "45.22",
+    "preparation_minutes": "20-30"
+  }
+}
+There is another semantic issue: order_placed=true currently comes from the LLM, but no actual order-submission tool exists in Chat Manager. It presently means “the conversation considers the order complete,” not “an external order system accepted it.”
+Use one of these designs:
+1. Rename it to order_ready=true, let the external repository submit it, then record success.
+2. Add a real order-submission integration and set order_placed=true only after that tool succeeds.
+The first design keeps this repository independent and is the cleaner boundary.
+In short: remove nearly all conversational policy from agent_prompt.md. The external repository should manage the phone connection and perform actions; Chat Manager should manage the conversation, history, menu, pricing, and structured business result.

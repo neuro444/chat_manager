@@ -45,21 +45,37 @@ def test_chat_can_return_llm_debug_for_dashboard(client):
     assert "Reference data" not in debug["reference_data"]
     assert debug["system_prompt"]
     persisted = client.get(
-        f"/sessions/{r.json()['session_id']}/debug"
+        f"/sessions/{r.json()['session_id']}/debug", params={"user_id": "u1"}
     )
     assert persisted.status_code == 200
     assert persisted.json() == debug
 
 
 def test_unknown_session_debug_is_404(client):
-    assert client.get("/sessions/missing/debug").status_code == 404
+    assert client.get(
+        "/sessions/missing/debug", params={"user_id": "u1"}
+    ).status_code == 404
+
+
+def test_session_debug_rejects_wrong_owner(client):
+    sid = client.post("/chat", json={"user_id": "u1", "message": "hi"}).json()["session_id"]
+    assert client.get(
+        f"/sessions/{sid}/debug", params={"user_id": "someone-else"}
+    ).status_code == 404
 
 
 def test_chat_continues_session(client):
     sid = client.post("/chat", json={"user_id": "u1", "message": "first"}).json()["session_id"]
     client.post("/chat", json={"user_id": "u1", "session_id": sid, "message": "second"})
-    msgs = client.get(f"/sessions/{sid}/messages").json()
+    msgs = client.get(f"/sessions/{sid}/messages", params={"user_id": "u1"}).json()
     assert [m["content"] for m in msgs][:3] == ["first", "api reply", "second"]
+
+
+def test_messages_rejects_wrong_owner(client):
+    sid = client.post("/chat", json={"user_id": "u1", "message": "hi"}).json()["session_id"]
+    assert client.get(
+        f"/sessions/{sid}/messages", params={"user_id": "someone-else"}
+    ).status_code == 404
 
 
 def test_chat_can_force_a_new_session_for_same_caller(client):
@@ -82,7 +98,7 @@ def test_chat_rejects_cross_caller_session_reuse(client):
     }).json()
     assert bob["session_id"] != alice["session_id"]
     alice_messages = client.get(
-        f"/sessions/{alice['session_id']}/messages"
+        f"/sessions/{alice['session_id']}/messages", params={"user_id": "alice"}
     ).json()
     assert [message["content"] for message in alice_messages] == ["private", "api reply"]
 
@@ -99,8 +115,26 @@ def test_sessions_scoped_by_user(client):
 
 def test_delete_session(client):
     sid = client.post("/chat", json={"user_id": "u1", "message": "hi"}).json()["session_id"]
-    client.delete(f"/sessions/{sid}")
-    assert client.get(f"/sessions/{sid}/messages").json() == []
+    r = client.delete(f"/sessions/{sid}", params={"user_id": "u1"})
+    assert r.status_code == 200
+    # The session no longer exists at all post-delete, so this now 404s --
+    # same ownership check that guards a live session correctly reports a
+    # deleted one as not found rather than as an empty transcript.
+    assert client.get(
+        f"/sessions/{sid}/messages", params={"user_id": "u1"}
+    ).status_code == 404
+
+
+def test_delete_session_rejects_wrong_owner(client):
+    """Deletion is irreversible, so this matters at least as much as the
+    read-side ownership check -- a wrong/guessed user_id must not be able
+    to destroy someone else's session."""
+    sid = client.post("/chat", json={"user_id": "u1", "message": "hi"}).json()["session_id"]
+    r = client.delete(f"/sessions/{sid}", params={"user_id": "someone-else"})
+    assert r.status_code == 404
+    # Session must still exist and be fully intact after the rejected attempt.
+    msgs = client.get(f"/sessions/{sid}/messages", params={"user_id": "u1"}).json()
+    assert len(msgs) == 2
 
 
 def test_delete_caller_removes_all_sessions(client):

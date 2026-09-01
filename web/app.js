@@ -195,7 +195,10 @@ async function loadSessions(previews = {}) {
 
 async function deleteSession(sessionId) {
   if (!confirm("Delete this session and all of its messages?")) return;
-  await api(`/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+  await api(
+    `/sessions/${encodeURIComponent(sessionId)}?user_id=${encodeURIComponent(state.caller)}`,
+    { method: "DELETE" }
+  );
   if (state.session === sessionId) {
     state.session = null;
     showSessionId(null);
@@ -211,9 +214,9 @@ async function openSession(sid) {
   state.session = sid;
   showSessionId(sid);
   await loadSessions();
-  const msgs = await api(`/sessions/${sid}/messages`);
+  const msgs = await api(`/sessions/${sid}/messages?user_id=${encodeURIComponent(state.caller)}`);
   renderMessages(msgs);
-  const debug = await api(`/sessions/${sid}/debug`);
+  const debug = await api(`/sessions/${sid}/debug?user_id=${encodeURIComponent(state.caller)}`);
   showLlmDebug(debug);
   const s = state.sessions.find((x) => x.session_id === sid);
   const sum = $("summary");

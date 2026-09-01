@@ -1,0 +1,744 @@
+# Telephony Gateway — New Repo Plan
+
+**Status:** plan for review · **Date:** 2026-08-19
+**Repo name (proposed):** `plivo_telephony_gateway`
+**Owns:** Plivo call handling, STT, TTS, and turning chat_manager's flags into
+real phone actions.
+**Does not own:** menu, pricing, prompts, conversation logic, order totals.
+
+> **Scope note.** Plivo only. ElevenAgents is deliberately excluded from this
+> plan — it is a separate transport and mixing the two is what makes the
+> transport layer un-testable. The adapter boundary in §6 is what lets
+> ElevenAgents be added later without reopening call logic.
+
+---
+
+## What We're Building
+
+A thin, stateless phone transport. It answers Plivo calls, converts speech to
+text, asks **chat_manager** what to say, speaks the answer back, and executes
+whatever actions chat_manager flags — hang up, transfer to a manager, or emit a
+completed order.
+
+The design rule that makes this worth a separate repo:
+
+> **chat_manager is text-in / text-out and knows nothing about audio.
+> The gateway is audio-in / audio-out and knows nothing about cake.**
+
+Every decision below follows from that one line. If the gateway ever needs to
+know a menu price, or chat_manager ever needs to know a Plivo call UUID, the
+boundary has leaked.
+
+---
+
+## Decisions Locked
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Transport | **Turn-based HTTP callbacks**, not WebSocket media streaming |
+| 2 | Speech | **Gateway owns STT + TTS.** chat_manager stays pure text |
+| 3 | Order submit | **Emit JSON + flag only.** No downstream POST — a future central repo consumes it, planned alongside dashboard observability |
+
+**On (1):** turn-based means ~1–2 s of latency between caller stopping and the
+agent replying, and **no barge-in** (the caller cannot interrupt the agent
+mid-sentence). That is the honest cost. What you get is a system you can test
+with `curl`, debug from logs, and ship this week. WebSocket streaming means
+owning VAD, jitter buffers, partial transcripts, and interrupt cancellation —
+worth doing once call flow is proven, not before.
+
+**Update after reading the current Plivo docs — this simplifies decision (2).**
+Plivo's `<GetInput>` element performs **speech recognition natively** and POSTs
+the transcript to your action URL as a `Speech` parameter, with a
+`SpeechConfidenceScore`. There is no recording to download and no STT call to
+make in the turn loop.
+
+That deletes an entire network hop and an entire failure mode from the design.
+The revised speech split is:
+
+| Direction | Who does it | How |
+|---|---|---|
+| Caller speech → text | **Plivo**, natively | `<GetInput inputType="speech">` → `Speech` param |
+| Text → caller audio | **Gateway** | ElevenLabs, ported from `voice/tts.py` |
+
+Deepgram/Whisper are **no longer needed for v1**. Keep the `speech/base.py`
+Protocol so a self-hosted STT can be swapped in later if Plivo's accuracy on
+Indian-accented menu items proves insufficient — that is the one risk worth
+measuring early (§7).
+
+**On (3):** the gateway never calls a restaurant ordering system. It records the
+structured order and exposes it. This is the right call — that consumer does not
+exist yet, and building a client for an unspecified API is how you get a
+rewrite.
+
+---
+
+## Current vs Target
+
+| Concern | Today | Target |
+|---|---|---|
+| Inbound calls | none | Plivo webhook → gateway |
+| STT | chat_manager `/stt` (browser mic only) | **Plivo native ASR** — no STT service |
+| TTS | chat_manager `/tts` (ElevenLabs) | gateway, ported from `voice/tts.py` |
+| Conversation | chat_manager `/chat` ✅ already correct | unchanged |
+| Hang up / transfer | flags returned, nothing acts on them | gateway emits Plivo XML |
+| Completed order | `order` object in response | emitted as an event + flag |
+
+---
+
+## 1. Call Flow (the whole system on one page)
+
+```
+     ☎ caller dials
+          │
+          ▼
+   Plivo POST /voice/answer ──────► XML: <GetInput action="/voice/turn"
+          │                                       inputType="speech">
+          │                                 <Speak>greeting</Speak>
+          │                              </GetInput>
+          ▼
+   caller speaks — Plivo transcribes it natively
+          │
+          ▼
+   POST /voice/turn   (Speech="three veg biriyani", From="+91...")
+     1. verify X-Plivo-Signature-V3          ── 403 if bad
+     2. text = form["Speech"]                ── no STT call needed
+     3. POST chat_manager /chat
+          {user_id: From, session_id, message: text}
+                                 ◄──────── {answer, call_ended, order_ready,
+                                            order, To_manager,
+                                            Transfer_to_Manager,
+                                            end_delay_seconds, ...}
+     4. TTS(answer) → mp3 cached at /audio/{id}.mp3
+     5. act on flags (§4)
+          │
+          ▼
+   XML: <Play>mp3</Play> + <GetInput> again   ← loop
+        or <Play> + <Hangup/>                  ← call_ended
+        or <Play> + <Dial><Number>mgr</Number> ← Transfer_to_Manager
+```
+
+**The gateway holds no conversation state.** `session_id` is kept in a small
+call-scoped map keyed by Plivo `CallUUID`, and `user_id` is simply the caller's
+number (`From`). chat_manager already treats the phone number as identity, so
+history, the caller's name, and dashboard continuity all work with zero extra
+wiring. That is the single most valuable property of the existing design and
+this plan does nothing to disturb it.
+
+---
+
+## 2. Repo Layout
+
+Mirrors chat_manager's conventions deliberately — same config-as-control-panel
+idea, same adapter-behind-protocol pattern, so moving between the two repos
+costs no re-orientation.
+
+```
+plivo_telephony_gateway/
+├── config.py              all tuning, env-driven          (mirrors chat_manager)
+├── app.py                 FastAPI: Plivo webhooks + audio serving
+├── plivo_xml.py           response XML builders — pure functions, easy to test
+├── security.py            Plivo signature verify + API key to chat_manager
+│
+├── brain/
+│   └── client.py          the ONLY place that talks to chat_manager
+├── speech/
+│   ├── base.py            Protocol: synthesize()  (+ transcribe() for later)
+│   └── elevenlabs_tts.py  ported from chat_manager voice/tts.py
+│                          NOTE: no STT engine — Plivo <GetInput> does ASR
+├── calls/
+│   ├── state.py           CallUUID -> session_id (TTL map)
+│   └── actions.py         flags -> telephony actions
+├── orders/
+│   └── emitter.py         order_ready -> event log (no downstream POST yet)
+├── audio/                 short-lived generated mp3s
+├── tests/
+└── docker-compose.yml
+```
+
+**The boundary:** only `brain/client.py` imports anything about chat_manager,
+and only `plivo_xml.py` emits Plivo syntax. Swapping to ElevenAgents later means
+adding one sibling to `plivo_xml.py` — call logic in `calls/actions.py` does not
+change.
+
+---
+
+## 3. Endpoints
+
+| Route | Caller | Purpose |
+|---|---|---|
+| `POST /voice/answer` | Plivo | Call begins — greet, start recording |
+| `POST /voice/turn` | Plivo | One caller utterance → one agent reply |
+| `POST /voice/hangup` | Plivo | Call ended — clean up state, finalize |
+| `GET /audio/{id}.mp3` | Plivo | Serves synthesized speech |
+| `GET /health` | ops | Liveness + chat_manager reachability |
+| `GET /orders/recent` | you | Orders emitted, pending the central repo |
+
+---
+
+## 4. Flag → Action Mapping
+
+This table is the gateway's entire reason to exist. chat_manager decides; the
+gateway executes.
+
+| chat_manager returns | Gateway does |
+|---|---|
+| `answer` | TTS → `<Play>` |
+| `call_ended: true` | `<Play>` the sign-off, wait `end_delay_seconds`, then `<Hangup>` |
+| `end_delay_seconds: 20` | With `<Play>` + `<Hangup/>` Plivo already finishes playback before hanging up, so no explicit sleep is needed. Keep the value for the `<Speak>` fallback path and for ElevenAgents later |
+| `Transfer_to_Manager: true` | `<Dial><Number>` the staff number, with `action=` so a no-answer is handled. Call stays live (`call_ended` is false) |
+| `To_manager: true` | Async follow-up — flag the record, do **not** transfer the live call |
+| `order_ready: true` + `order` | Emit the order event (§5) |
+| `order_ready: false` / `order: null` | Emit nothing. Pricing failed or was never run |
+| any unknown field | Log and pass through — see below |
+
+**Two subtleties that will cause bugs if missed:**
+
+1. **`To_manager` and `Transfer_to_Manager` are different things.** The first is
+   an asynchronous cake/catering follow-up; the second is a live transfer now.
+   Confusing them either drops a lead or hangs up on a customer.
+2. **`end_delay_seconds` is a real requirement, not advisory.** chat_manager's
+   own config comments say it exists so TTS can finish the sign-off before the
+   line drops. Hang up immediately and callers get cut off mid-goodbye.
+
+**Forward compatibility:** chat_manager passes unrecognized prompt-defined JSON
+fields straight through `_response_extensions()`. The gateway must therefore
+treat unknown keys as non-fatal — log them, ignore them. That way a new prompt
+flag ships without a gateway deploy.
+
+---
+
+## 5. Order Emission
+
+Per decision (3): **produce the artifact, do not deliver it.**
+
+```json
+{
+  "event": "order_ready",
+  "emitted_at": "2026-08-19T18:04:00Z",
+  "idempotency_key": "<session_id>",
+  "call_uuid": "...",
+  "user_id": "+919876543210",
+  "session_id": "...",
+  "order": { "customer_name": "Priya", "items": [...], "total": "45.22",
+             "preparation_minutes": "20-30" }
+}
+```
+
+Rules, taken directly from chat_manager's contract:
+
+- Emit **only** when `order_ready === true` and `order !== null`.
+- **Never parse order details out of `answer`.** The text is for the human ear;
+  the object is the data. This is stated in the integration notes and is worth
+  restating here because it is the most tempting shortcut in the system.
+- `idempotency_key = session_id`, so the future consumer can dedupe a retry.
+- Emit once per session. A caller confirming twice must not create two orders.
+
+Write to an append-only JSONL file plus a `GET /orders/recent` endpoint. When the
+central repo exists, it either tails that log or the emitter gains an HTTP sink —
+one file changes.
+
+---
+
+## 5a. Reference Implementation
+
+Verified against the current Plivo docs (XML Reference → Input Collection, Call
+Routing, and Callbacks → Signature Validation V3, read 2026-08-19).
+
+### `security.py` — webhook signature verification
+
+Plivo signs every webhook with HMAC-SHA256 (V3). **Without this check, anyone
+who learns your webhook URL can drive your phone agent and bill your account.**
+
+```python
+"""Plivo V3 webhook signature verification.
+
+Plivo assembles: full URL + POST params sorted case-sensitively by name
+(name and value concatenated) + "." + nonce, then HMAC-SHA256 with the Auth
+Token and base64-encodes it. Multiple active auth tokens produce a
+comma-separated header — any one matching is valid.
+"""
+import base64
+import hashlib
+import hmac
+
+from fastapi import Request, HTTPException
+
+import config
+
+
+def _expected(url: str, params: dict[str, str], nonce: str, token: str) -> str:
+    payload = url + "".join(
+        f"{k}{v}" for k, v in sorted(params.items())  # Unix-style case-sensitive
+    ) + "." + nonce
+    digest = hmac.new(token.encode(), payload.encode(), hashlib.sha256).digest()
+    return base64.b64encode(digest).decode()
+
+
+async def verify_plivo(request: Request) -> dict[str, str]:
+    """FastAPI dependency: returns the validated form params, or raises 403."""
+    params = {k: v for k, v in (await request.form()).multi_items()}
+    if not config.PLIVO_AUTH_TOKEN:
+        raise HTTPException(500, "PLIVO_AUTH_TOKEN not configured")
+
+    signature = request.headers.get("X-Plivo-Signature-V3", "")
+    nonce = request.headers.get("X-Plivo-Signature-V3-Nonce", "")
+    if not signature or not nonce:
+        raise HTTPException(403, "missing Plivo signature headers")
+
+    # PUBLIC_BASE_URL, not request.url — behind nginx the scheme/host Plivo
+    # signed is not what FastAPI sees, and the signature would never match.
+    url = config.PLIVO_PUBLIC_BASE_URL.rstrip("/") + request.url.path
+    expected = _expected(url, params, nonce, config.PLIVO_AUTH_TOKEN)
+
+    # Account may have several active tokens -> comma-separated signatures.
+    if not any(hmac.compare_digest(expected, s.strip())
+               for s in signature.split(",")):
+        raise HTTPException(403, "invalid Plivo signature")
+    return params
+```
+
+**Verified against Plivo's documented example.** Assembling their sample
+(`https://example.com/abcd?foo=bar` + CallUUID/Digits/From/To + nonce
+`kjsdhfsd87sd7yisud2`) with this code reproduces their stated string exactly,
+and a tampered param changes the signature. Python's `sorted()` on str keys is
+already Unix-style case-sensitive, so no custom comparator is needed.
+
+```python
+def test_tampered_param_rejected():
+    url, nonce, tok = "https://example.com/abcd?foo=bar", "kjsdhfsd87sd7yisud2", "t"
+    base = {"Digits": "1234", "CallUUID": "abc", "From": "+15551111111"}
+    tampered = {**base, "Digits": "9999"}
+    assert _expected(url, base, nonce, tok) != _expected(url, tampered, nonce, tok)
+```
+
+Two mistakes this code exists to prevent:
+
+1. **Using `request.url`.** Behind nginx + TLS termination, FastAPI often sees
+   `http://127.0.0.1:8002/...` while Plivo signed
+   `https://voice.yourdomain.com/...`. Signatures then fail 100% of the time and
+   the cause is invisible. Sign against `PLIVO_PUBLIC_BASE_URL`.
+2. **Using `==` to compare.** `hmac.compare_digest` is constant-time; `==` leaks
+   timing information.
+
+### `plivo_xml.py` — response builders
+
+Pure string functions, trivially unit-testable without a phone.
+
+```python
+"""Plivo XML builders. Pure functions — no I/O, no state."""
+from xml.sax.saxutils import escape
+
+import config
+
+
+def _get_input(prompt_xml: str) -> str:
+    """Prompt the caller and collect their speech.
+
+    speechModel=phone_call is Plivo's model tuned for phone audio quality.
+    hints boost recognition of menu terms the default model mangles.
+    """
+    return (
+        f'<GetInput action="{config.PLIVO_PUBLIC_BASE_URL}/voice/turn" method="POST" '
+        f'inputType="speech" speechModel="phone_call" '
+        f'language="{config.SPEECH_LANGUAGE}" '
+        f'executionTimeout="{config.EXECUTION_TIMEOUT}" '
+        f'speechEndTimeout="{config.SPEECH_END_TIMEOUT}" '
+        f'hints="{escape(config.SPEECH_HINTS)}" '
+        f'redirect="true">'
+        f"{prompt_xml}"
+        f"</GetInput>"
+    )
+
+
+def greeting(text: str) -> str:
+    return f"<Response>{_get_input(f'<Speak>{escape(text)}</Speak>')}</Response>"
+
+
+def play_and_continue(audio_url: str) -> str:
+    """Speak the agent's answer, then listen for the next utterance."""
+    return f"<Response>{_get_input(f'<Play>{escape(audio_url)}</Play>')}</Response>"
+
+
+def play_and_hangup(audio_url: str) -> str:
+    """Play the sign-off, then hang up.
+
+    <Hangup/> executes only after <Play> finishes, so the caller always hears
+    the full goodbye. See the end_delay_seconds note in section 4.
+    """
+    return f"<Response><Play>{escape(audio_url)}</Play><Hangup/></Response>"
+
+
+def play_and_transfer(audio_url: str, number: str) -> str:
+    """Hand the live call to staff (DID forward).
+
+    action= is REQUIRED, not optional: if staff do not answer, Plivo posts
+    DialStatus=no-answer|busy|failed there and the caller is otherwise left in
+    silence. dialMusic stops the caller hearing dead air while it rings.
+    """
+    return (
+        f"<Response><Play>{escape(audio_url)}</Play>"
+        f'<Dial callerId="{escape(config.PLIVO_PHONE_NUMBER)}" '
+        f'timeout="{config.TRANSFER_TIMEOUT}" '
+        f'dialMusic="real" '
+        f'action="{config.PLIVO_PUBLIC_BASE_URL}/voice/transfer_done" method="POST">'
+        f"<Number>{escape(number)}</Number></Dial></Response>"
+    )
+
+
+def transfer_failed(text: str) -> str:
+    """Staff did not pick up. Never drop the caller into silence."""
+    return f"<Response><Speak>{escape(text)}</Speak><Hangup/></Response>"
+
+
+def apology_and_hangup(text: str) -> str:
+    """Fallback when the brain is unreachable — never leave a dead line."""
+    return f"<Response><Speak>{escape(text)}</Speak><Hangup/></Response>"
+```
+
+Note every interpolation goes through `escape()`. A caller named "Bob & Sons"
+or a menu item with `&` in it produces malformed XML otherwise, and the call
+drops with no useful error.
+
+### `app.py` — the two webhooks that matter
+
+```python
+@app.post("/voice/answer")
+async def answer(params: dict = Depends(verify_plivo)):
+    """Plivo hits this when a call connects."""
+    call_uuid, caller = params.get("CallUUID", ""), params.get("From", "")
+    calls.start(call_uuid, caller)          # new call -> no session yet
+    return xml_response(plivo_xml.greeting(config.GREETING))
+
+
+@app.post("/voice/turn")
+async def turn(params: dict = Depends(verify_plivo)):
+    """One caller utterance -> one agent reply."""
+    call_uuid = params.get("CallUUID", "")
+    caller = params.get("From", "")
+    speech = (params.get("Speech") or "").strip()
+
+    # Caller said nothing. Re-prompt rather than dropping the call.
+    if not speech:
+        return xml_response(plivo_xml.greeting(config.REPROMPT))
+
+    state = calls.get(call_uuid)
+    try:
+        reply = brain.chat(user_id=caller, session_id=state.session_id,
+                           message=speech)
+    except BrainUnavailable:
+        # Never a dead line: apologize and transfer to a human.
+        log.exception("brain unreachable call_uuid=%s", call_uuid)
+        return xml_response(
+            plivo_xml.play_and_transfer(tts(config.BRAIN_DOWN_MSG),
+                                        config.PLIVO_TRANSFER_NUMBER))
+
+    calls.bind_session(call_uuid, reply["session_id"])
+    audio_url = tts_cached(reply["answer"], call_uuid)
+
+    # Order first: emit even if the call then ends or transfers.
+    if reply.get("order_ready") and reply.get("order"):
+        orders.emit(reply, call_uuid=call_uuid, user_id=caller)
+
+    if reply.get("Transfer_to_Manager"):
+        return xml_response(
+            plivo_xml.play_and_transfer(audio_url, config.PLIVO_TRANSFER_NUMBER))
+
+    if reply.get("call_ended"):
+        return xml_response(plivo_xml.play_and_hangup(audio_url))
+
+    return xml_response(plivo_xml.play_and_continue(audio_url))
+
+
+def xml_response(body: str) -> Response:
+    return Response(content=body, media_type="application/xml")
+```
+
+**Why order emission comes before the flag branches:** a confirmed order that
+also ends the call must still be emitted. Putting it after an early `return`
+silently drops exactly the orders that completed successfully.
+
+### `brain/client.py` — the only place that talks to chat_manager
+
+```python
+class BrainUnavailable(RuntimeError):
+    pass
+
+
+def chat(user_id: str, session_id: str | None, message: str) -> dict:
+    """Call chat_manager /chat. Returns its JSON verbatim.
+
+    Deliberately does NOT model the response as a typed schema: chat_manager
+    passes new prompt-defined fields through automatically, and an unknown key
+    must never be a parse error here.
+    """
+    try:
+        r = httpx.post(
+            f"{config.CHAT_MANAGER_URL}/chat",
+            json={"user_id": user_id, "session_id": session_id,
+                  "message": message},
+            headers={config.BRAIN_API_KEY_HEADER: config.BRAIN_API_KEY},
+            timeout=config.BRAIN_TIMEOUT,
+        )
+        r.raise_for_status()
+        return r.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise BrainUnavailable(str(exc)) from exc
+```
+
+### TTS caching
+
+`voice/tts.py` ports over unchanged. One addition the phone path needs: Plivo
+fetches `<Play>` URLs over the public internet, so synthesized mp3s must be
+written to disk and served from `GET /audio/{id}.mp3` — an unguessable id, a
+short TTL, and deletion on hangup. Do not stream TTS inline in the webhook
+response; Plivo expects XML there, not audio.
+
+---
+
+### `/voice/transfer_done` — the handler most transfers forget
+
+`<Dial>` posts here when the manager leg ends. Without it, a manager who is
+busy or away leaves the caller listening to nothing.
+
+```python
+@app.post("/voice/transfer_done")
+async def transfer_done(params: dict = Depends(verify_plivo)):
+    status = params.get("DialStatus", "")       # completed|no-answer|busy|failed
+    if status == "completed":
+        return xml_response("<Response><Hangup/></Response>")
+
+    log.warning("manager transfer failed status=%s cause=%s call_uuid=%s",
+                status, params.get("DialHangupCause"), params.get("CallUUID"))
+    return xml_response(plivo_xml.transfer_failed(config.TRANSFER_FAILED_MSG))
+```
+
+### `/voice/hangup` — call teardown
+
+Configured as the app's **Hangup URL**. Fires whenever the call ends, however
+it ends. Idempotency key is `CallUUID` (Plivo's own guidance) because callbacks
+can be delivered more than once.
+
+```python
+@app.post("/voice/hangup")
+async def hangup(params: dict = Depends(verify_plivo)):
+    call_uuid = params.get("CallUUID", "")
+    if calls.already_finalized(call_uuid):       # duplicate delivery
+        return Response(status_code=200)
+    calls.finalize(call_uuid,
+                   duration=params.get("Duration"),
+                   cause=params.get("HangupCause"))
+    audio.purge(call_uuid)                       # delete cached TTS mp3s
+    return Response(status_code=200)
+```
+
+---
+
+## 5b. Plivo Capability Audit
+
+Every telephony capability this system needs, and where it comes from. Checked
+against the current docs — nothing here is assumed.
+
+| Need | Plivo mechanism | Status |
+|---|---|---|
+| Answer inbound call | App **Answer URL** → `POST /voice/answer` | required |
+| Hear the caller | `<GetInput inputType="speech">` — **native ASR** | required |
+| Better phone accuracy | `speechModel="phone_call"` | required |
+| Menu-term accuracy | `hints="veg biriyani, gulab jamun, ..."` (500 phrases / 10k chars max) | **high value** |
+| Speak the answer | `<Play>` an ElevenLabs mp3 | required |
+| Simple/fallback speech | `<Speak>` (Plivo TTS) | fallback only |
+| End the call | `<Hangup/>` after `<Play>` | required |
+| **Transfer to manager** | `<Dial><Number>` (DID forward) | **required** |
+| Transfer failure handling | `<Dial action=...>` → `DialStatus` | **required** |
+| No dead air while ringing | `dialMusic="real"` | recommended |
+| Caller ID on transfer | `callerId` on `<Dial>` | recommended |
+| Webhook authenticity | `X-Plivo-Signature-V3` HMAC-SHA256 | **required** |
+| Survive gateway downtime | App **Fallback Answer URL** | **required** |
+| Call teardown / cleanup | App **Hangup URL** | required |
+| Duplicate callbacks | Idempotency on `CallUUID` | required |
+| Caller silence | `<GetInput>` `retries`, `startInputTimeout` | required |
+| DTMF fallback ("press 0") | `inputType="dtmf speech"` | recommended |
+| Call recording | `<Record>` | **deliberately not used** |
+| Barge-in / interruption | `<Stream>` WebSocket | deferred (Phase 6) |
+| Outbound callbacks | Calls API | not needed for inbound ordering |
+
+**Three notes worth acting on:**
+
+1. **`hints` is the cheapest accuracy win available.** Plivo's ASR will mangle
+   "gulab jamun" and "biriyani" with a default model. Feed the menu item names
+   in as hints — you already have them in `menu/menu_flat.json`, so generate the
+   hint string from that file rather than hand-maintaining it.
+2. **Fallback Answer URL is not optional for a restaurant.** If the gateway is
+   down, the default behavior is a failed call — a customer hearing nothing.
+   Point it at a static XML that says "we're having trouble, please hold" and
+   `<Dial>`s the restaurant directly. A dead line loses the order *and* the
+   customer.
+3. **Do not enable `<Record>`.** Recording full call audio creates a second
+   copy of PII (voice + order details) with its own retention and consent
+   obligations, on top of the transcripts already flagged in `security_plan.md`.
+   The transcript from `<GetInput>` is sufficient. If recording is ever wanted,
+   treat it as a separate legal decision — many US states require two-party
+   consent.
+
+### SIP transfer (later, if staff move to softphones)
+
+Plivo recommends SIP auth forward over DID for contact centers — lower cost, no
+PSTN minutes, lower latency:
+
+```xml
+<Dial>
+  <User sipAuthUsername="..." sipAuthPassword="...">
+    sip:agent@your-contact-center.example.com
+  </User>
+</Dial>
+```
+
+For one restaurant with staff on mobile phones, **DID forward is the right
+choice** — it works with any phone and needs no SIP infrastructure. Revisit only
+if they adopt a softphone system. Note that SIP transfers additionally require
+whitelisting Plivo's media-server IPs at the far end, and fail with
+`sip_auth_failed` (4240) if credentials are wrong.
+
+---
+
+## 6. Why Three Repos (the modular argument)
+
+You asked what I'd do as an SWE. Splitting here is right, but for a sharper
+reason than "microservices are good":
+
+**These components change on different clocks and fail in different ways.**
+
+- The **brain** changes when the menu, prompt, or pricing changes — often, and
+  driven by the restaurant.
+- The **gateway** changes when a telephony vendor changes — rarely, and driven
+  by Plivo/ElevenAgents.
+- **Speech vendors** change on cost and latency benchmarks — independently of
+  both.
+
+A prompt tweak should never risk dropping live calls. A Plivo API change should
+never require re-testing cake pricing. Separate repos make that structural
+rather than a matter of discipline.
+
+The second reason is **testability**. The gateway can be tested end-to-end with
+recorded audio and a stubbed brain; the brain is already tested with a fake
+provider (159 tests). Fused together, every conversation test would need audio
+fixtures.
+
+**Where I'd push back on over-splitting:** do not split STT and TTS into their
+own service. They are stateless library calls, and a network hop per turn adds
+latency to the one path where latency is most audible.
+
+---
+
+## 6a. Configuration
+
+`config.py`, mirroring chat_manager's single-control-panel convention.
+
+```python
+# ── Plivo ─────────────────────────────
+PLIVO_AUTH_ID        = os.getenv("PLIVO_AUTH_ID", "")
+PLIVO_AUTH_TOKEN     = os.getenv("PLIVO_AUTH_TOKEN", "")     # signs webhooks
+PLIVO_PHONE_NUMBER   = os.getenv("PLIVO_PHONE_NUMBER", "")   # caller ID on transfer
+PLIVO_PUBLIC_BASE_URL = os.getenv("PLIVO_PUBLIC_BASE_URL", "")  # https://voice.example.com
+                                                               # MUST match what Plivo calls
+
+# ── Brain (chat_manager) ──────────────
+CHAT_MANAGER_URL      = os.getenv("CHAT_MANAGER_URL", "http://chat-manager-api:8000")
+BRAIN_API_KEY         = os.getenv("BRAIN_API_KEY", "")
+BRAIN_API_KEY_HEADER  = os.getenv("BRAIN_API_KEY_HEADER", "X-API-Key")
+BRAIN_TIMEOUT         = _float("BRAIN_TIMEOUT", 20.0)
+
+# ── Transfer ──────────────────────────
+PLIVO_TRANSFER_NUMBER = os.getenv("PLIVO_TRANSFER_NUMBER", "")  # manager, E.164
+TRANSFER_TIMEOUT  = _int("TRANSFER_TIMEOUT", 25)
+
+# ── Speech ────────────────────────────
+SPEECH_LANGUAGE     = os.getenv("SPEECH_LANGUAGE", "en-US")
+SPEECH_END_TIMEOUT  = os.getenv("SPEECH_END_TIMEOUT", "auto")
+EXECUTION_TIMEOUT   = _int("EXECUTION_TIMEOUT", 15)
+SPEECH_HINTS        = os.getenv("SPEECH_HINTS", "")     # generated from menu
+ELEVENLABS_API_KEY  = os.getenv("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "")
+
+# ── Copy ──────────────────────────────
+GREETING            = os.getenv("GREETING", "Thanks for calling. What can I get for you?")
+REPROMPT            = os.getenv("REPROMPT", "Sorry, I didn't catch that. Could you repeat it?")
+BRAIN_DOWN_MSG      = os.getenv("BRAIN_DOWN_MSG", "Sorry, let me get someone to help you.")
+TRANSFER_FAILED_MSG = os.getenv("TRANSFER_FAILED_MSG", "Sorry, no one is free right now. Please call back shortly.")
+```
+
+`PLIVO_PUBLIC_BASE_URL` is the one people get wrong. It must be the exact public URL
+Plivo is configured to call, because the signature is computed over it.
+
+---
+
+## 7. Risks
+
+| Risk | Mitigation |
+|---|---|
+| **Turn latency** (ASR + LLM + TTS, ~1–3 s) | Plivo's ASR is inline (no extra hop). Remaining cost is the LLM + TTS; keep replies short |
+| **No barge-in** — caller cannot interrupt | Accepted for v1. Keep agent replies short (prompt already does) |
+| **ASR mishears menu items** | `hints` from `menu_flat.json` + `speechModel=phone_call`; chat_manager confirms items back before pricing. Measure `SpeechConfidenceScore` on real calls |
+| Plivo retries a webhook | Idempotency on `session_id`; emit order once |
+| chat_manager down | Gateway plays a graceful apology and transfers to staff — never a dead line |
+| Manager doesn't answer transfer | `<Dial action=>` → `DialStatus` handler with a spoken fallback |
+| Gateway down entirely | Plivo **Fallback Answer URL** → static XML that dials the restaurant |
+| Duplicate Plivo callbacks | Idempotency keyed on `CallUUID` |
+
+---
+
+## 8. Phases
+
+Golden Rule applies: the Restaurant repo stays frozen, and nothing touches
+chat_manager's live deployment until the gateway is proven at its own IP/port.
+
+### Phase 0 — Prerequisite in chat_manager (blocking)
+**The two CRITICAL findings in `security_plan.md` must be fixed first.**
+The gateway will call `/chat` across the network, and the dashboard endpoints
+(`/callers`, `/sessions`, `/search`) currently return every caller's phone number
+with **no authentication**. Exposing chat_manager publicly before Phase 1 of the
+security plan turns a local issue into a live PII breach. The gateway needs an
+API key to send anyway — same work.
+
+### Phase 1 — Skeleton, no audio
+Plivo webhook + signature verify + `<Speak>` a fixed greeting + `<Hangup>`.
+Prove a real call connects. *Blast radius: none — new repo, new number.*
+
+### Phase 2 — Full turn loop
+`<GetInput>` speech → `/chat` → ElevenLabs TTS → `<Play>` → loop. Generate
+`SPEECH_HINTS` from `menu/menu_flat.json`. Build a text-mode harness that posts
+fake Plivo form params so the loop is testable without placing calls.
+
+### Phase 3 — Actions
+`call_ended` → `<Hangup/>`; `Transfer_to_Manager` → `<Dial>` **plus the
+`/voice/transfer_done` failure path**; `To_manager` flagging; hangup cleanup;
+unknown-field passthrough.
+
+### Phase 4 — Order emission
+JSONL emitter, idempotency, `/orders/recent`.
+
+### Phase 5 — Deploy
+Docker Compose, gateway behind nginx + TLS (Plivo requires a public HTTPS
+webhook), chat_manager reachable **only** on the compose network — never
+published. Configure the Plivo app's Answer URL, **Fallback Answer URL**, and
+Hangup URL. Verify signature validation against a real Plivo request before
+going live.
+
+### Phase 6 — Deferred
+WebSocket streaming + barge-in; ElevenAgents adapter; central order repo and
+dashboard observability.
+
+---
+
+## 9. Open Items
+
+1. **Repo name + access** — proposed `plivo_telephony_gateway`; confirm the
+   GitHub org/account (note the multi-account setup: `neuro444` owns
+   chat_manager).
+2. **Manager transfer number** — needed for `<Dial>`; env var `PLIVO_TRANSFER_NUMBER`.
+3. **STT vendor** — Deepgram (faster, better on phone audio) vs Whisper
+   (already in chat_manager). Recommend benchmarking both in Phase 2 on real
+   8 kHz call audio, since phone-quality speech is where they differ most.
+4. **The running container is stale.** The live container on `127.0.0.1:8001`
+   still returns `order_placed` and lacks `order` / `Transfer_to_Manager`;
+   source is ahead. Rebuild before integrating, or the gateway will be coded
+   against a contract that no longer exists.

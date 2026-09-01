@@ -5,8 +5,10 @@ supplied by the voice channel (browser mic today, telephony webhook later).
 Staff read the dashboard; callers never see a screen.
 """
 import hmac
+import logging
 import re
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File
@@ -20,7 +22,47 @@ from service import handle_message
 from storage import make_repo
 from menu.loader import menu_items
 
-app = FastAPI(title="Chat Manager — Phone Ordering")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("chat_manager.api")
+
+
+def check_api_key_configuration() -> bool:
+    """Check whether both named API keys are configured and log appropriate status.
+
+    Returns True only if TELEPHONY_API_KEY and DASHBOARD_API_KEY are both set.
+    Each is checked (and warned about) independently, since either being unset
+    disables auth on a different, real set of routes -- not an all-or-nothing
+    single flag anymore.
+    """
+    telephony_set = bool(config.TELEPHONY_API_KEY)
+    dashboard_set = bool(config.DASHBOARD_API_KEY)
+
+    if not telephony_set:
+        logger.warning(
+            "SECURITY WARNING: TELEPHONY_API_KEY is not set — /chat accepts "
+            "requests with no telephony key. Set TELEPHONY_API_KEY in your "
+            "production environment (.env)."
+        )
+    if not dashboard_set:
+        logger.warning(
+            "SECURITY WARNING: DASHBOARD_API_KEY is not set — transcript, "
+            "session, and order endpoints are publicly accessible without "
+            "authentication. Set DASHBOARD_API_KEY in your production "
+            "environment (.env)."
+        )
+    if telephony_set and dashboard_set:
+        logger.info("API key authentication is ENABLED (X-API-Key required for guarded endpoints)")
+        return True
+    return False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    check_api_key_configuration()
+    yield
+
+
+app = FastAPI(title="Chat Manager — Phone Ordering", lifespan=lifespan)
 
 # Allows the voice_central dashboard (browser JS on a different origin)
 # to call this API directly. telephony calls chat_manager server-to-server
@@ -37,17 +79,40 @@ app.add_middleware(
 WEB = Path(__file__).parent / "web"
 
 
-def require_api_key(x_api_key: str = Header(default="", alias="X-API-Key")):
-    """Guard every route that exposes caller data or costs money to call.
+def require_dashboard_key(x_api_key: str = Header(default="", alias="X-API-Key")):
+    """Guard every route that exposes caller data other than /chat itself.
 
-    A no-op when config.API_KEY is unset, so local dev and the test suite run
-    unchanged. Once set, the telephony gateway must send the same value. /health
-    stays open so Docker's healthcheck and the gateway's readiness probe work.
+    Only the dashboard key is accepted here -- telephony has no legitimate
+    reason to read or delete transcripts, so it is deliberately not one of
+    the accepted keys on this dependency (see require_chat_key for /chat,
+    which both callers may use).
+
+    A no-op when config.DASHBOARD_API_KEY is unset, so local dev and the test
+    suite run unchanged. /health stays open so Docker's healthcheck and the
+    gateway's readiness probe work without any key.
     """
-    if not config.API_KEY:
+    if not config.DASHBOARD_API_KEY:
         return
-    if not hmac.compare_digest(x_api_key, config.API_KEY):
+    if not hmac.compare_digest(x_api_key, config.DASHBOARD_API_KEY):
         raise HTTPException(401, "invalid or missing API key")
+
+
+def require_chat_key(x_api_key: str = Header(default="", alias="X-API-Key")):
+    """Guard /chat specifically -- the one route both callers legitimately use.
+
+    The telephony gateway calls it for every live turn; the dashboard's own
+    bundled UI calls it for staff live-testing. Either named key is accepted.
+    A no-op when both keys are unset, matching require_dashboard_key's local-
+    dev behavior.
+    """
+    if not config.TELEPHONY_API_KEY and not config.DASHBOARD_API_KEY:
+        return
+    if x_api_key and (
+        hmac.compare_digest(x_api_key, config.TELEPHONY_API_KEY or "\0")
+        or hmac.compare_digest(x_api_key, config.DASHBOARD_API_KEY or "\0")
+    ):
+        return
+    raise HTTPException(401, "invalid or missing API key")
 
 _repo = None
 _provider = None
@@ -162,6 +227,7 @@ class ChatIn(BaseModel):
     message: str
     include_llm_debug: bool = False
     new_session: bool = False
+    channel: str = "voice"             # "voice" | "whatsapp" — gates call-only behavior (e.g. disclosure)
 
 
 @app.get("/health")
@@ -169,17 +235,17 @@ def health():
     return {"status": "ok", "storage": config.STORAGE, "model": config.LLM_MODEL}
 
 
-@app.post("/chat", dependencies=[Depends(require_api_key)])
+@app.post("/chat", dependencies=[Depends(require_chat_key)])
 def chat(body: ChatIn):
     if not body.message.strip():
         raise HTTPException(400, "message cannot be empty")
     return handle_message(get_repo(), get_provider(),
                           _caller(body.user_id), body.session_id, body.message,
                           include_llm_debug=body.include_llm_debug,
-                          new_session=body.new_session)
+                          new_session=body.new_session, channel=body.channel)
 
 
-@app.get("/callers", dependencies=[Depends(require_api_key)])
+@app.get("/callers", dependencies=[Depends(require_dashboard_key)])
 def callers():
     """Distinct phone numbers with activity counts — the dashboard's left rail."""
     repo = get_repo()
@@ -195,14 +261,14 @@ def callers():
     return out
 
 
-@app.delete("/callers", dependencies=[Depends(require_api_key)])
+@app.delete("/callers", dependencies=[Depends(require_dashboard_key)])
 def delete_caller(user_id: str):
     user_id = _caller(user_id)
     get_repo().delete_user(user_id)
     return {"deleted": user_id}
 
 
-@app.get("/sessions", dependencies=[Depends(require_api_key)])
+@app.get("/sessions", dependencies=[Depends(require_dashboard_key)])
 def sessions(user_id: str = "default"):
     repo = get_repo()
     user_id = _caller(user_id)
@@ -222,13 +288,13 @@ def sessions(user_id: str = "default"):
     return out
 
 
-@app.get("/orders/recent", dependencies=[Depends(require_api_key)])
+@app.get("/orders/recent", dependencies=[Depends(require_dashboard_key)])
 def recent_orders(limit: int = 100):
     """Completed structured orders from chat_manager, newest first."""
     return {"orders": _all_completed_orders(get_repo(), max(1, min(limit, 500)))}
 
 
-@app.get("/menu", dependencies=[Depends(require_api_key)])
+@app.get("/menu", dependencies=[Depends(require_dashboard_key)])
 def pickup_menu():
     """Read-only pickup menu used by the dashboard.
 
@@ -263,7 +329,7 @@ def pickup_menu():
     }
 
 
-@app.get("/crm/customers", dependencies=[Depends(require_api_key)])
+@app.get("/crm/customers", dependencies=[Depends(require_dashboard_key)])
 def crm_customers():
     """Customer/order aggregates derived from persisted completed sessions."""
     repo = get_repo()
@@ -312,30 +378,46 @@ def crm_customers():
     return customers
 
 
-@app.get("/sessions/{session_id}/messages", dependencies=[Depends(require_api_key)])
-def messages(session_id: str):
+@app.get("/sessions/{session_id}/messages", dependencies=[Depends(require_dashboard_key)])
+def messages(session_id: str, user_id: str):
+    """user_id is a security boundary, not a convenience -- without it, a
+    leaked/guessed session_id alone would be enough to read any caller's
+    transcript. The dashboard always knows which caller it's asking about
+    (it opens a session from a customer's own session list), so this adds
+    no friction for legitimate use."""
+    repo = get_repo()
+    session = repo.get_session(session_id)
+    if session is None or session.user_id != _caller(user_id):
+        raise HTTPException(404, "session not found")
     return [
         {"seq": m.seq, "role": m.role, "content": m.content,
          "created_at": _iso(m.created_at)}
-        for m in get_repo().all_messages(session_id)
+        for m in repo.all_messages(session_id)
     ]
 
 
-@app.get("/sessions/{session_id}/debug", dependencies=[Depends(require_api_key)])
-def session_debug(session_id: str):
+@app.get("/sessions/{session_id}/debug", dependencies=[Depends(require_dashboard_key)])
+def session_debug(session_id: str, user_id: str):
     session = get_repo().get_session(session_id)
-    if session is None:
+    if session is None or session.user_id != _caller(user_id):
         raise HTTPException(404, "session not found")
     return session.metadata.get("llm_debug")
 
 
-@app.delete("/sessions/{session_id}", dependencies=[Depends(require_api_key)])
-def delete(session_id: str):
-    get_repo().delete_session(session_id)
+@app.delete("/sessions/{session_id}", dependencies=[Depends(require_dashboard_key)])
+def delete(session_id: str, user_id: str):
+    """Same ownership check as GET /sessions/{id}/messages and .../debug --
+    deletion is irreversible, so a bare session_id must not be sufficient
+    to destroy the wrong customer's history."""
+    repo = get_repo()
+    session = repo.get_session(session_id)
+    if session is None or session.user_id != _caller(user_id):
+        raise HTTPException(404, "session not found")
+    repo.delete_session(session_id)
     return {"deleted": session_id}
 
 
-@app.get("/search", dependencies=[Depends(require_api_key)])
+@app.get("/search", dependencies=[Depends(require_dashboard_key)])
 def search(user_id: str, q: str):
     """Search a caller's past conversations; returns a preview per hit."""
     hits = get_repo().search_messages(_caller(user_id), q, "", 20)
@@ -346,7 +428,7 @@ def search(user_id: str, q: str):
     ]
 
 
-@app.get("/staff/search", dependencies=[Depends(require_api_key)])
+@app.get("/staff/search", dependencies=[Depends(require_dashboard_key)])
 def staff_search(q: str):
     """Authenticated staff search across caller phone numbers and sessions."""
     query = (q or "").strip()
@@ -368,7 +450,7 @@ def staff_search(q: str):
 
 
 # ── voice ────────────────────────────────
-@app.post("/stt", dependencies=[Depends(require_api_key)])
+@app.post("/stt", dependencies=[Depends(require_dashboard_key)])
 async def stt(file: UploadFile = File(...)):
     """Speech to text via OpenAI. Used by the browser mic."""
     import tempfile, os
@@ -386,7 +468,7 @@ class TTSIn(BaseModel):
     text: str
 
 
-@app.post("/tts", dependencies=[Depends(require_api_key)])
+@app.post("/tts", dependencies=[Depends(require_dashboard_key)])
 def tts(body: TTSIn):
     """Text to speech via ElevenLabs. Returns mp3 bytes."""
     from voice.tts import synthesize

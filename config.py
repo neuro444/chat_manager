@@ -84,8 +84,25 @@ HOST = os.getenv("HOST", "127.0.0.1")
 PORT = _int("PORT", 8000)
 
 # ── API auth ──────────────────────────
-# Shared secret the telephony gateway sends on every request. When empty,
-# auth is disabled entirely so local development and the test suite are
-# unaffected; set it in production, where the API is reachable over the network.
-API_KEY = os.getenv("API_KEY", "")
+# Two named keys, not one shared secret -- so a route can tell which caller
+# it's talking to and scope access accordingly (see api.py). Both use the
+# same header name; a caller sends whichever key it was issued.
+# TELEPHONY_API_KEY: the telephony gateway sends this on /chat only -- it
+# has no legitimate reason to read or delete transcripts.
+# DASHBOARD_API_KEY: staff tooling (this repo's own bundled dashboard, and
+# voice_central) sends this -- it can reach /chat too (the dashboard has its
+# own live chat-test feature) plus every transcript/session/order route.
+# Either empty disables auth on the routes it would have guarded, so local
+# development and the test suite are unaffected; set both in production.
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
+TELEPHONY_API_KEY = os.getenv("TELEPHONY_API_KEY", "")
+DASHBOARD_API_KEY = os.getenv("DASHBOARD_API_KEY", "")
+
+# ── Call disclosure ───────────────────
+# Voice-only (see context/assembler.py). Off by default so existing behavior
+# and SYSTEM_PROMPT-based tests are unaffected until explicitly enabled.
+DISCLOSURE_ENABLED = os.getenv("DISCLOSURE_ENABLED", "false").lower() in ("1", "true", "yes")
+DISCLOSURE_LINE = os.getenv(
+    "DISCLOSURE_LINE",
+    "This call may be recorded and processed by our ordering assistant.",
+)
