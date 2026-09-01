@@ -247,7 +247,7 @@ def _build_ready_order(provider, requested: bool, customer_name=None):
 
 def handle_message(
     repo, provider, user_id, session_id, user_message, include_llm_debug=False,
-    new_session=False,
+    new_session=False, channel="voice",
 ):
     """Run one full turn and return {"answer", "session_id"}."""
     session_id, is_first, messages = _start_turn(
@@ -284,6 +284,14 @@ def handle_message(
     to_manager = parsed["To_manager"]
     extensions = _response_extensions(parsed)
     answer = parsed["answer"]
+    # Prepended deterministically, not left to the LLM to include on its own --
+    # a system-message instruction was tested and found unreliable (dropped on
+    # some turns when the model had more to compose, e.g. resolving a name at
+    # the same time). Voice-only, greeting-turn-only: consent/wiretapping law
+    # concerns recorded calls, not text channels, so this must never leak into
+    # WhatsApp or other non-voice channels regardless of the flag.
+    if channel == "voice" and is_first and config.DISCLOSURE_ENABLED:
+        answer = f"{config.DISCLOSURE_LINE} {answer}"
     llm_debug = _llm_debug_payload(messages, raw)
     tts_chars = tokens.count_tts_chars(answer)
     _finish_turn(
