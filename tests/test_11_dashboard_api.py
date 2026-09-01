@@ -50,7 +50,9 @@ def test_sessions_include_message_count_and_timestamp(client):
 def test_messages_include_timestamps_for_bubbles(client):
     sid = client.post("/chat", json={"user_id": "+913333333333",
                                      "message": "biryani"}).json()["session_id"]
-    msgs = client.get(f"/sessions/{sid}/messages").json()
+    msgs = client.get(
+        f"/sessions/{sid}/messages", params={"user_id": "+913333333333"}
+    ).json()
     assert all("created_at" in m and "role" in m for m in msgs)
     assert [m["role"] for m in msgs] == ["user", "assistant"]
 

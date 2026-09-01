@@ -211,9 +211,9 @@ async function openSession(sid) {
   state.session = sid;
   showSessionId(sid);
   await loadSessions();
-  const msgs = await api(`/sessions/${sid}/messages`);
+  const msgs = await api(`/sessions/${sid}/messages?user_id=${encodeURIComponent(state.caller)}`);
   renderMessages(msgs);
-  const debug = await api(`/sessions/${sid}/debug`);
+  const debug = await api(`/sessions/${sid}/debug?user_id=${encodeURIComponent(state.caller)}`);
   showLlmDebug(debug);
   const s = state.sessions.find((x) => x.session_id === sid);
   const sum = $("summary");

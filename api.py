@@ -379,18 +379,27 @@ def crm_customers():
 
 
 @app.get("/sessions/{session_id}/messages", dependencies=[Depends(require_dashboard_key)])
-def messages(session_id: str):
+def messages(session_id: str, user_id: str):
+    """user_id is a security boundary, not a convenience -- without it, a
+    leaked/guessed session_id alone would be enough to read any caller's
+    transcript. The dashboard always knows which caller it's asking about
+    (it opens a session from a customer's own session list), so this adds
+    no friction for legitimate use."""
+    repo = get_repo()
+    session = repo.get_session(session_id)
+    if session is None or session.user_id != _caller(user_id):
+        raise HTTPException(404, "session not found")
     return [
         {"seq": m.seq, "role": m.role, "content": m.content,
          "created_at": _iso(m.created_at)}
-        for m in get_repo().all_messages(session_id)
+        for m in repo.all_messages(session_id)
     ]
 
 
 @app.get("/sessions/{session_id}/debug", dependencies=[Depends(require_dashboard_key)])
-def session_debug(session_id: str):
+def session_debug(session_id: str, user_id: str):
     session = get_repo().get_session(session_id)
-    if session is None:
+    if session is None or session.user_id != _caller(user_id):
         raise HTTPException(404, "session not found")
     return session.metadata.get("llm_debug")
 
