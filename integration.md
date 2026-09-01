@@ -319,8 +319,13 @@ GET /search?user_id=customer-123&q=samosa
 ### Delete a session
 
 ```http
-DELETE /sessions/{session_id}
+DELETE /sessions/{session_id}?user_id=customer-123
 ```
+
+`user_id` is required and checked the same way as the read endpoints above:
+the session must belong to that caller, or this returns `404` and nothing is
+deleted. Given deletion is irreversible, this matters at least as much as the
+read-side ownership check.
 
 Deletion removes the session and its messages and cannot be undone through the
 API.

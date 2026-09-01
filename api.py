@@ -405,8 +405,15 @@ def session_debug(session_id: str, user_id: str):
 
 
 @app.delete("/sessions/{session_id}", dependencies=[Depends(require_dashboard_key)])
-def delete(session_id: str):
-    get_repo().delete_session(session_id)
+def delete(session_id: str, user_id: str):
+    """Same ownership check as GET /sessions/{id}/messages and .../debug --
+    deletion is irreversible, so a bare session_id must not be sufficient
+    to destroy the wrong customer's history."""
+    repo = get_repo()
+    session = repo.get_session(session_id)
+    if session is None or session.user_id != _caller(user_id):
+        raise HTTPException(404, "session not found")
+    repo.delete_session(session_id)
     return {"deleted": session_id}
 
 

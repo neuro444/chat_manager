@@ -107,10 +107,10 @@ returning 404 (not 403) on a mismatch — see `api.py`. Session ids are UUID4 so
 they are not guessable, but they are handed to clients, appear in logs, and are
 printed to stdout by `service.py`, so this was worth closing regardless.
 
-**Still open**: `DELETE /sessions/{id}` has the identical gap — no `user_id`,
-no ownership check — and was not part of this fix. It still returns HTTP 200
-to any caller holding the dashboard key, regardless of whether that session
-belongs to the customer they claim.
+**Also fixed**: `DELETE /sessions/{id}` had the identical gap — no `user_id`,
+no ownership check, HTTP 200 to any dashboard-key holder regardless of whose
+session it was. Given deletion is irreversible, this was addressed at the
+same time rather than left open.
 
 Worth calling out: `storage/base.py` explicitly documents `user_id` on
 `search_messages` as *"a security boundary, not a convenience — omitting it leaks
@@ -287,9 +287,9 @@ Golden Rule callout below applies to every phase.
 1. ✅ Done — API-key dependency added on every guarded route, split into
    `TELEPHONY_API_KEY` (chat-only) and `DASHBOARD_API_KEY` (everything else).
    `/health` stays open.
-2. ⚠️ Partially done — `user_id` ownership check added to `GET
-   /sessions/{id}/messages` and `GET /sessions/{id}/debug` (404, not 403, on
-   mismatch). `DELETE /sessions/{id}` still has no such check — still open.
+2. ✅ Done — `user_id` ownership check added to `GET /sessions/{id}/messages`,
+   `GET /sessions/{id}/debug`, and `DELETE /sessions/{id}` (404, not 403, on
+   mismatch).
 3. Add explicit `CORSMiddleware` with the dashboard origin enumerated. Never
    `["*"]` with credentials.
 4. Tests: assert 401 unauthenticated, and that caller A cannot read caller B's

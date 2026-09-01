@@ -115,13 +115,26 @@ def test_sessions_scoped_by_user(client):
 
 def test_delete_session(client):
     sid = client.post("/chat", json={"user_id": "u1", "message": "hi"}).json()["session_id"]
-    client.delete(f"/sessions/{sid}")
+    r = client.delete(f"/sessions/{sid}", params={"user_id": "u1"})
+    assert r.status_code == 200
     # The session no longer exists at all post-delete, so this now 404s --
     # same ownership check that guards a live session correctly reports a
     # deleted one as not found rather than as an empty transcript.
     assert client.get(
         f"/sessions/{sid}/messages", params={"user_id": "u1"}
     ).status_code == 404
+
+
+def test_delete_session_rejects_wrong_owner(client):
+    """Deletion is irreversible, so this matters at least as much as the
+    read-side ownership check -- a wrong/guessed user_id must not be able
+    to destroy someone else's session."""
+    sid = client.post("/chat", json={"user_id": "u1", "message": "hi"}).json()["session_id"]
+    r = client.delete(f"/sessions/{sid}", params={"user_id": "someone-else"})
+    assert r.status_code == 404
+    # Session must still exist and be fully intact after the rejected attempt.
+    msgs = client.get(f"/sessions/{sid}/messages", params={"user_id": "u1"}).json()
+    assert len(msgs) == 2
 
 
 def test_delete_caller_removes_all_sessions(client):

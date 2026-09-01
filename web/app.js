@@ -195,7 +195,10 @@ async function loadSessions(previews = {}) {
 
 async function deleteSession(sessionId) {
   if (!confirm("Delete this session and all of its messages?")) return;
-  await api(`/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
+  await api(
+    `/sessions/${encodeURIComponent(sessionId)}?user_id=${encodeURIComponent(state.caller)}`,
+    { method: "DELETE" }
+  );
   if (state.session === sessionId) {
     state.session = null;
     showSessionId(null);
