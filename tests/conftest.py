@@ -19,9 +19,11 @@ def provider():
 
 @pytest.fixture(autouse=True)
 def _clean_api_key(monkeypatch):
-    """Ensure tests run against unkeyed baseline by default even if .env has API_KEY set."""
+    """Ensure tests run against an unkeyed baseline by default even if .env
+    has either key set."""
     import config
-    monkeypatch.setattr(config, "API_KEY", "")
+    monkeypatch.setattr(config, "TELEPHONY_API_KEY", "")
+    monkeypatch.setattr(config, "DASHBOARD_API_KEY", "")
 
 
 @pytest.fixture

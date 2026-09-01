@@ -27,20 +27,33 @@ logger = logging.getLogger("chat_manager.api")
 
 
 def check_api_key_configuration() -> bool:
-    """Check whether API key authentication is enabled and log appropriate status.
+    """Check whether both named API keys are configured and log appropriate status.
 
-    Returns True if API_KEY is set and active, False otherwise.
+    Returns True only if TELEPHONY_API_KEY and DASHBOARD_API_KEY are both set.
+    Each is checked (and warned about) independently, since either being unset
+    disables auth on a different, real set of routes -- not an all-or-nothing
+    single flag anymore.
     """
-    if config.API_KEY:
+    telephony_set = bool(config.TELEPHONY_API_KEY)
+    dashboard_set = bool(config.DASHBOARD_API_KEY)
+
+    if not telephony_set:
+        logger.warning(
+            "SECURITY WARNING: TELEPHONY_API_KEY is not set — /chat accepts "
+            "requests with no telephony key. Set TELEPHONY_API_KEY in your "
+            "production environment (.env)."
+        )
+    if not dashboard_set:
+        logger.warning(
+            "SECURITY WARNING: DASHBOARD_API_KEY is not set — transcript, "
+            "session, and order endpoints are publicly accessible without "
+            "authentication. Set DASHBOARD_API_KEY in your production "
+            "environment (.env)."
+        )
+    if telephony_set and dashboard_set:
         logger.info("API key authentication is ENABLED (X-API-Key required for guarded endpoints)")
         return True
-    else:
-        logger.warning(
-            "SECURITY WARNING: API_KEY is not set — API key authentication is DISABLED. "
-            "All endpoints are publicly accessible without authentication. "
-            "Set API_KEY in your production environment (.env) to enforce access control."
-        )
-        return False
+    return False
 
 
 @asynccontextmanager

@@ -116,20 +116,33 @@ def test_auth_disabled_when_both_keys_unset(client, monkeypatch):
     ).status_code == 200
 
 
-def test_startup_check_logs_warning_when_key_unset(caplog, monkeypatch):
+def test_startup_check_warns_when_telephony_key_unset(caplog, monkeypatch):
     import api
     import logging
-    monkeypatch.setattr(config, "API_KEY", "")
+    monkeypatch.setattr(config, "TELEPHONY_API_KEY", "")
+    monkeypatch.setattr(config, "DASHBOARD_API_KEY", "d4shboard")
     with caplog.at_level(logging.WARNING):
         is_enabled = api.check_api_key_configuration()
         assert not is_enabled
-        assert any("SECURITY WARNING: API_KEY is not set" in record.message for record in caplog.records)
+        assert any("TELEPHONY_API_KEY is not set" in record.message for record in caplog.records)
 
 
-def test_startup_check_logs_info_when_key_set(caplog, monkeypatch):
+def test_startup_check_warns_when_dashboard_key_unset(caplog, monkeypatch):
     import api
     import logging
-    monkeypatch.setattr(config, "API_KEY", "s3cret-token-1234")
+    monkeypatch.setattr(config, "TELEPHONY_API_KEY", "t3l3phony")
+    monkeypatch.setattr(config, "DASHBOARD_API_KEY", "")
+    with caplog.at_level(logging.WARNING):
+        is_enabled = api.check_api_key_configuration()
+        assert not is_enabled
+        assert any("DASHBOARD_API_KEY is not set" in record.message for record in caplog.records)
+
+
+def test_startup_check_logs_info_when_both_keys_set(caplog, monkeypatch):
+    import api
+    import logging
+    monkeypatch.setattr(config, "TELEPHONY_API_KEY", "t3l3phony")
+    monkeypatch.setattr(config, "DASHBOARD_API_KEY", "d4shboard")
     with caplog.at_level(logging.INFO):
         is_enabled = api.check_api_key_configuration()
         assert is_enabled
