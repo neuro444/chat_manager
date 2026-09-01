@@ -278,8 +278,13 @@ Returns session IDs, titles, message counts, timestamps, and rolling summaries.
 ### Read a session transcript
 
 ```http
-GET /sessions/{session_id}/messages
+GET /sessions/{session_id}/messages?user_id=customer-123
 ```
+
+`user_id` is required and is a security boundary, not a convenience: the
+session must actually belong to that caller, or this returns `404` (not
+`403`, so a probe can't distinguish "wrong owner" from "doesn't exist").
+A bare `session_id` alone is not sufficient to read a transcript.
 
 Returns messages ordered by sequence:
 
@@ -293,6 +298,17 @@ Returns messages ordered by sequence:
   }
 ]
 ```
+
+### Read a session's debug context
+
+```http
+GET /sessions/{session_id}/debug?user_id=customer-123
+```
+
+Staff/dashboard use only — returns the raw assembled LLM context and
+response for the session's most recent turn (system prompt, history, tool
+input/output). Same `user_id` ownership requirement and `404` behavior as
+`/sessions/{session_id}/messages` above.
 
 ### Search a user's past messages
 

@@ -92,18 +92,25 @@ binding is the *sole* control — the moment nginx proxies this service (which
 `vps_instructions.md` implies is next), it is public. **The port binding is
 load-bearing security right now and nothing in the repo says so.**
 
-### 2. CRITICAL — IDOR on transcript reads
+### 2. CRITICAL — IDOR on transcript reads — ✅ FIXED (GET routes) on `compliance` branch
 
 ```bash
 $ curl -s http://127.0.0.1:8001/sessions/1bd723ab-.../messages
 [{"seq":1,"role":"user","content":"Hi",...},{"seq":2,"role":"assistant",...}]
 ```
 
-`GET /sessions/{session_id}/messages` accepts **no `user_id`** and performs no
-ownership check (`api.py`). Any session id → the full transcript. Session ids are
-UUID4 so they are not guessable, but they are handed to clients, appear in logs,
-and are printed to stdout by `service.py`. Same for `DELETE /sessions/{id}`,
-which returned HTTP 200 to an unauthenticated caller.
+~~`GET /sessions/{session_id}/messages` accepts **no `user_id`** and performs no
+ownership check (`api.py`). Any session id → the full transcript.~~ **Fixed**:
+both `GET /sessions/{id}/messages` and `GET /sessions/{id}/debug` now require
+`user_id` and verify it matches the session's actual owner via `get_session()`,
+returning 404 (not 403) on a mismatch — see `api.py`. Session ids are UUID4 so
+they are not guessable, but they are handed to clients, appear in logs, and are
+printed to stdout by `service.py`, so this was worth closing regardless.
+
+**Still open**: `DELETE /sessions/{id}` has the identical gap — no `user_id`,
+no ownership check — and was not part of this fix. It still returns HTTP 200
+to any caller holding the dashboard key, regardless of whether that session
+belongs to the customer they claim.
 
 Worth calling out: `storage/base.py` explicitly documents `user_id` on
 `search_messages` as *"a security boundary, not a convenience — omitting it leaks
@@ -277,13 +284,12 @@ Golden Rule callout below applies to every phase.
 
 ### Phase 1 — Access control (do before any public exposure)
 *Blast radius: local only. No VPS impact.*
-1. Add an API-key dependency (`APIKeyHeader`) on `/callers`, `/sessions`,
-   `/search`, `/stt`, `/tts`, and `DELETE /sessions/{id}`. Leave `/health` open.
-   `/chat` needs its own story — it's called by the voice channel, so it needs a
-   shared secret from the telephony webhook, not a staff key.
-2. Require `user_id` on `GET /sessions/{id}/messages` and `DELETE`, and verify
-   session ownership via `get_session()` before returning anything. Return 404,
-   not 403, on mismatch.
+1. ✅ Done — API-key dependency added on every guarded route, split into
+   `TELEPHONY_API_KEY` (chat-only) and `DASHBOARD_API_KEY` (everything else).
+   `/health` stays open.
+2. ⚠️ Partially done — `user_id` ownership check added to `GET
+   /sessions/{id}/messages` and `GET /sessions/{id}/debug` (404, not 403, on
+   mismatch). `DELETE /sessions/{id}` still has no such check — still open.
 3. Add explicit `CORSMiddleware` with the dashboard origin enumerated. Never
    `["*"]` with credentials.
 4. Tests: assert 401 unauthenticated, and that caller A cannot read caller B's
