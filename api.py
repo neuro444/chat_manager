@@ -168,6 +168,15 @@ def _message_result(message) -> dict:
         "name": _usable_name(
             response_fields.get("user_name") or response_fields.get("name")
         ),
+        "to_manager": bool(
+            metadata.get("To_manager", response_fields.get("To_manager"))
+        ),
+        "summary": str(metadata.get("summary") or "").strip(),
+        "verbatim_user_chat": (
+            metadata.get("verbatim_user_chat")
+            if isinstance(metadata.get("verbatim_user_chat"), list)
+            else []
+        ),
     }
 
 
@@ -175,6 +184,7 @@ def _session_facts(repo, session) -> dict:
     """Read the latest structured name/order emitted within one session."""
     name = ""
     completed = None
+    handoff = None
     for message in reversed(repo.all_messages(session.session_id)):
         if message.role != "assistant":
             continue
@@ -198,11 +208,23 @@ def _session_facts(repo, session) -> dict:
                 "channel": "chat",
                 "order": order,
             }
-        if name and completed is not None:
+        if handoff is None and result["to_manager"]:
+            handoff = {
+                "session_id": session.session_id,
+                "user_id": session.user_id,
+                "requested_at": _iso(message.created_at),
+                "order_type": result["order_type"] or "cake/catering",
+                "name": candidate_name,
+                "summary": result["summary"],
+                "verbatim_user_chat": result["verbatim_user_chat"],
+            }
+        if name and completed is not None and handoff is not None:
             break
     if completed is not None and not completed["name"]:
         completed["name"] = name
-    return {"name": name, "completed_order": completed}
+    if handoff is not None and not handoff["name"]:
+        handoff["name"] = name
+    return {"name": name, "completed_order": completed, "handoff": handoff}
 
 
 def _all_completed_orders(repo, limit: int = 200) -> list[dict]:
@@ -214,6 +236,25 @@ def _all_completed_orders(repo, limit: int = 200) -> list[dict]:
                 orders.append(completed)
     orders.sort(key=lambda item: item.get("emitted_at") or "", reverse=True)
     return orders[:limit]
+
+
+def _all_approvals(repo, limit: int = 200) -> list[dict]:
+    """Manager handoffs awaiting a decision, newest first.
+
+    A handoff is pending until the same session produces a completed order --
+    that is the only completion signal chat_manager persists today.
+    """
+    approvals = []
+    for caller in repo.list_callers(limit=200):
+        for session in repo.list_sessions(caller["user_id"], limit=50):
+            facts = _session_facts(repo, session)
+            handoff = facts["handoff"]
+            if not handoff:
+                continue
+            handoff["status"] = "resolved" if facts["completed_order"] else "pending"
+            approvals.append(handoff)
+    approvals.sort(key=lambda item: item.get("requested_at") or "", reverse=True)
+    return approvals[:limit]
 
 
 def _menu_id(category: str, name: str) -> str:
@@ -292,6 +333,20 @@ def sessions(user_id: str = "default"):
 def recent_orders(limit: int = 100):
     """Completed structured orders from chat_manager, newest first."""
     return {"orders": _all_completed_orders(get_repo(), max(1, min(limit, 500)))}
+
+
+@app.get("/api/approvals", dependencies=[Depends(require_dashboard_key)])
+def approvals(status: str = "pending", limit: int = 100):
+    """Manager handoffs for the dashboard's "Needs Approval" column.
+
+    `status` accepts pending, resolved, or all.
+    """
+    rows = _all_approvals(get_repo(), max(1, min(limit, 500)))
+    if status in ("pending", "resolved"):
+        rows = [row for row in rows if row["status"] == status]
+    return {"approvals": rows, "pending_count": sum(
+        1 for row in rows if row["status"] == "pending"
+    )}
 
 
 @app.get("/menu", dependencies=[Depends(require_dashboard_key)])
