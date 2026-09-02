@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
+import approvals
 import config
 from providers import make_provider
 from service import handle_message
@@ -292,6 +293,22 @@ def sessions(user_id: str = "default"):
 def recent_orders(limit: int = 100):
     """Completed structured orders from chat_manager, newest first."""
     return {"orders": _all_completed_orders(get_repo(), max(1, min(limit, 500)))}
+
+
+@app.get("/api/approvals", dependencies=[Depends(require_dashboard_key)])
+def list_approvals():
+    """Return approval decisions keyed by order_id, so the dashboard knows which pending orders were approved/rejected."""
+    return approvals.get_decisions()
+
+
+@app.post("/api/approvals/{order_id}/approve", dependencies=[Depends(require_dashboard_key)])
+def approve_order(order_id: str):
+    return approvals.set_decision(order_id, "approved")
+
+
+@app.post("/api/approvals/{order_id}/reject", dependencies=[Depends(require_dashboard_key)])
+def reject_order(order_id: str):
+    return approvals.set_decision(order_id, "rejected")
 
 
 @app.get("/menu", dependencies=[Depends(require_dashboard_key)])
