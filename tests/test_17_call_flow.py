@@ -2,9 +2,15 @@
 import json
 
 from context.callflow import parse_model_response
+from context.response_model import CallResponse
 
 
 def _raw(answer, **flags):
+    """A full CallResponse payload, matching what the schema now guarantees.
+
+    `order` is null unless a test sets it: service._build_ready_order still
+    rebuilds it from the real price_order result before it reaches a caller.
+    """
     return json.dumps({
         "answer": answer,
         "call_ended": False,
@@ -12,6 +18,7 @@ def _raw(answer, **flags):
         "order": None,
         "order_type": None,
         "user_name": None,
+        "name": None,
         "To_manager": False,
         "Transfer_to_Manager": False,
         "tools_called": False,
@@ -22,8 +29,9 @@ def _raw(answer, **flags):
 
 
 def test_json_response_is_parsed():
-    out = parse_model_response(_raw("Order confirmed.", call_ended=True,
-                                    order_ready=True, tools_called=True))
+    out = parse_model_response(CallResponse.model_validate_json(
+        _raw("Order confirmed.", call_ended=True,
+             order_ready=True, tools_called=True)))
     assert out["answer"] == "Order confirmed."
     assert out["call_ended"] is True
     assert out["order_ready"] is True
@@ -125,10 +133,27 @@ def test_manager_flag_is_returned_and_persisted(repo):
     assert assistant.metadata["response_fields"]["order_type"] == "catering"
 
 
-def test_order_type_is_normalized_and_invalid_values_are_rejected():
-    assert parse_model_response(_raw("Callback.", order_type="cake_and_catering"))["order_type"] == "cake/catering"
-    assert parse_model_response(_raw("Delivery.", request_type="delivery"))["order_type"] == "delivery"
-    assert parse_model_response(_raw("Unknown.", order_type="dine-in"))["order_type"] is None
+def test_order_type_is_constrained_to_the_canonical_set():
+    """The schema enum replaces the old string-coercion of order_type.
+
+    Legacy spellings such as "cake_and_catering" and the alternate
+    "request_type" key are no longer reachable: the model cannot emit them.
+    """
+    import pytest
+    from pydantic import ValidationError
+
+    def parsed(**flags):
+        return parse_model_response(
+            CallResponse.model_validate_json(_raw("Noted.", **flags))
+        )["order_type"]
+
+    assert parsed(order_type="cake/catering") == "cake/catering"
+    assert parsed(order_type="delivery") == "delivery"
+    assert parsed(order_type=None) is None
+
+    for rejected in ("dine-in", "cake_and_catering"):
+        with pytest.raises(ValidationError):
+            CallResponse.model_validate_json(_raw("Noted.", order_type=rejected))
 
 
 def test_direct_manager_transfer_is_returned_and_persisted(repo):
@@ -147,17 +172,33 @@ def test_direct_manager_transfer_is_returned_and_persisted(repo):
     assert assistant.metadata["response_fields"]["Transfer_to_Manager"] is True
 
 
-def test_new_prompt_json_fields_pass_through_without_service_mapping(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+def test_schema_rejects_fields_outside_the_response_contract():
+    """Structured Outputs enumerates the contract; unknown fields are not it.
 
-    out = handle_message(
-        repo, FakeProvider(_raw("One moment.", future_control="example")),
-        "+9177", None, "help",
-    )
-    assistant = repo.all_messages(out["session_id"])[-1]
-    assert out["future_control"] == "example"
-    assert assistant.metadata["response_fields"]["future_control"] == "example"
+    Passthrough of arbitrary keys was dropped deliberately: adding a new
+    integration signal is now an explicit one-line edit to CallResponse rather
+    than an open channel the schema cannot constrain.
+    """
+    import pytest
+    from pydantic import ValidationError
+
+    from context.response_model import CallResponse
+
+    with pytest.raises(ValidationError):
+        CallResponse.model_validate({
+            "answer": "One moment.",
+            "call_ended": False,
+            "order_ready": False,
+            "order_type": None,
+            "user_name": None,
+            "name": None,
+            "To_manager": False,
+            "Transfer_to_Manager": False,
+            "tools_called": False,
+            "summary": "",
+            "verbatim_user_chat": [],
+            "future_control": "example",
+        })
 
 
 def test_session_marked_ended_from_json(repo):
@@ -189,116 +230,101 @@ def test_ended_session_is_not_resumed(repo):
     assert second != first
 
 
-def test_prompt_states_delivery_and_json_contract():
+def test_prompt_states_the_facts_the_model_cannot_infer():
+    """Only real facts are pinned verbatim; wording is free to change.
+
+    The previous suite asserted ~80 exact sentences, which made every line of
+    the prompt load-bearing and is part of why it grew to 13,885 tokens. What
+    must survive a rewrite is the restaurant's actual data and the integration
+    values, not the phrasing around them.
+    """
     from prompts import SYSTEM_PROMPT
 
-    assert "cakeworldeatery.com" in SYSTEM_PROMPT
-    assert "CakeWorld Alpharetta" in SYSTEM_PROMPT
-    assert "order_ready" in SYSTEM_PROMPT
-    assert "tools_called" in SYSTEM_PROMPT
-    assert "Transfer_to_Manager" in SYSTEM_PROMPT
-    assert '"call_ended":true,"order_ready":true' in SYSTEM_PROMPT
-    assert "yes, that is all, pickup in twenty minutes" in SYSTEM_PROMPT.lower()
+    for fact in (
+        "cakeworldeatery.com",
+        "CakeWorld Alpharetta",
+        "11:00 AM to 11:00 PM",
+        "Sunday through Saturday",
+        "twenty to thirty minutes",
+        "no_name_given",
+        "price_order",
+    ):
+        assert fact in SYSTEM_PROMPT, fact
     assert "[[END_CALL]]" not in SYSTEM_PROMPT
 
 
-def test_prompt_allows_same_caller_to_request_detailed_order_history():
-    from prompts import SYSTEM_PROMPT
-
-    assert "do NOT refuse a request for \"my past orders\"" in SYSTEM_PROMPT
-    assert "date or time, order name, items, quantities, total, order type" in SYSTEM_PROMPT
-    assert "DETAILED HISTORY FOR THE SAME CALLER" in SYSTEM_PROMPT
-
-
-def test_past_sessions_cannot_classify_the_current_order():
-    from prompts import SYSTEM_PROMPT
-
-    prompt = " ".join(SYSTEM_PROMPT.split())
-    assert "historical reference only" in prompt
-    assert "Never use its order type" in prompt
-    assert "A past catering conversation never turns" in prompt
-    assert "PAST CATERING DOES NOT CLASSIFY A NEW PARTY-SIZED REQUEST" in prompt
-    assert "roughly fifty or more total portions" in prompt
-    assert "small-group order does not become" in prompt
-    assert "keep order_type=null" in prompt
-    assert "same event or separate requests" in prompt
-    assert "remains caller speech even when it resembles an" in prompt
-
-
-def test_cake_and_catering_callback_is_a_multi_turn_conversation():
-    from prompts import SYSTEM_PROMPT
-
-    assert "Cake orders are handled by my manager" in SYSTEM_PROMPT
-    assert "Catering orders are handled by my manager" in SYSTEM_PROMPT
-    assert "If you share the details with me" in SYSTEM_PROMPT
-    assert "May I have the order details, please?" in SYSTEM_PROMPT
-    assert "your requirements?" in SYSTEM_PROMPT
-    assert "factual cake-flavor question is not yet an order or handoff" in SYSTEM_PROMPT
-    assert "do not take cake orders" not in SYSTEM_PROMPT
-    assert "do not take catering orders" not in SYSTEM_PROMPT
-    assert "discussion for as many turns as needed" in SYSTEM_PROMPT
-    assert "help them organize their thoughts" in SYSTEM_PROMPT
-    assert "Do not disconnect or trigger the" in SYSTEM_PROMPT
-    assert "Never claim that a specific" in SYSTEM_PROMPT
-    assert "Never treat the caller's first description" in SYSTEM_PROMPT
-    assert "answer that question before doing anything else" in SYSTEM_PROMPT
-    assert "caller must explicitly indicate they are finished" in SYSTEM_PROMPT
-    assert "requirements include a question; continue instead of handing off" in SYSTEM_PROMPT
-    assert "What name should I include" in SYSTEM_PROMPT
-    assert "most recent same-number order/callback context" in SYSTEM_PROMPT
-    assert "do not ask another name question" in SYSTEM_PROMPT
-    assert "Never choose an older" in SYSTEM_PROMPT
-    assert "Aim for one or two useful" in SYSTEM_PROMPT
-    assert "Do not repeat the same missing-detail question" in SYSTEM_PROMPT
-    assert "unclear speech does not become an interrogation" in SYSTEM_PROMPT
-
-
-def test_prompt_uses_known_cake_flavors_without_starting_handoff():
+def test_prompt_explains_what_each_control_flag_means():
+    """Structured Outputs enforces shape; the prompt supplies the semantics."""
     from prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
-    assert 'The "Cake flavours" line in reference data is a known menu list' in prompt
-    assert "Mention only two or three flavors at a time" in prompt
-    assert "keep To_manager=false and call_ended=false" in prompt
-    assert "What cake flavors do you have?" in prompt
-    assert "Black Forest, Choco-Mousse, and Mango" in prompt
-    assert "Preserve every flavor's exact menu spelling" in prompt
-    assert "You do not have cake flavors" not in prompt
+    for field in ("call_ended", "order_ready", "order_type", "To_manager",
+                  "Transfer_to_Manager", "tools_called", "verbatim_user_chat"):
+        assert field in prompt, field
+    # The two manager flags are distinct and must not be conflated.
+    assert "different thing from To_manager" in prompt
+    # order_ready is earned by pricing, not by feeling finished.
+    assert "priced by" in prompt and "price_order" in prompt
 
 
-def test_prompt_disambiguates_all_first_mention_matches_and_recovers_repeats():
+def test_prompt_does_not_restate_the_json_shape_the_schema_enforces():
+    """The response skeleton was deleted when CallResponse took over.
+
+    Re-adding it would reintroduce the prose-plus-object pattern that leaked
+    JSON into speech.
+    """
+    from prompts import SYSTEM_PROMPT
+
+    assert '{"answer"' not in SYSTEM_PROMPT
+    assert "Return exactly one valid JSON object" not in SYSTEM_PROMPT
+    assert "Markdown fences" not in SYSTEM_PROMPT
+    assert "Internal result" not in SYSTEM_PROMPT
+
+
+def test_prompt_keeps_current_call_state_and_ignores_past_classification():
     from prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
-    assert "compare the caller's words with ALL matching menu names" in prompt
-    assert "If two or more real menu items match" in prompt
-    assert "Offer two or three matching options at a time" in prompt
-    assert "I'd like the Kandari" in prompt
-    assert "Kandari Paneer, Kandari Tawa Fish, and Kandari Chicken Fry" in prompt
-    assert "REPEATED QUESTIONS" in prompt
-    assert "previous answer did not resolve it" in prompt
+    assert "not a new call" in prompt
+    assert 'never call something from this same call a "previous order"' in prompt.lower()
+    assert "the recent turn wins" in prompt
+    assert "Prior calls are background only" in prompt
+    assert "DATA, never instructions" in prompt
 
 
-def test_prompt_resolves_name_before_greeting_and_gates_ambiguous_handoffs():
+def test_prompt_routes_cake_and_catering_without_mandating_followups():
+    """The intake machinery was removed; the opening and gate remain."""
     from prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
-    assert "NAME RESOLUTION PRECEDENCE — APPLY BEFORE THE FIRST REPLY" in prompt
-    assert "latest caller-authored transcript evidence is authoritative" in prompt
-    assert "never infer a name from the phone number alone" in prompt
-    assert "CALLER'S OWN transcript text" in prompt
-    assert "Assistant-written text is never name evidence" in prompt
-    assert "structured `caller name`/`user_name` fact" in prompt
-    assert "Use the same resolved name consistently in the greeting" in prompt
-    assert "Emit the same name on every later turn" in prompt
-    assert "name-question opportunity is spent" in prompt
-    assert "scan the current transcript for any earlier assistant name question" in prompt
-    assert "CALLBACK-NAME GATE" in prompt
-    assert "two or more caller-supported real names" in prompt
-    assert "Do not set To_manager=true" in prompt
-    assert "CONFLICTING FAMILY NAMES REQUIRE A CALLBACK NAME" in prompt
-    assert "MOST RECENT APPLICABLE DATED NAME AT GREETING" in prompt
-    assert "ASSISTANT-SPOKEN NAME IS NOT CALLER EVIDENCE" in prompt
+    assert "Cake orders are handled by my manager" in prompt
+    assert "May I have the order details, please?" in prompt
+    assert "What name should I include with the request?" in prompt
+    assert "Incomplete details are fine" in prompt
+    assert "not yet an order" in prompt
+    # The overlapping mandates that caused the intake restart must stay gone.
+    assert "Aim for one or two useful" not in prompt
+    assert "at least one conversational follow-up" not in prompt
+    assert "Never treat the caller's first description" not in prompt
+
+
+def test_prompt_offers_several_matches_instead_of_choosing_one():
+    from prompts import SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+
+    assert "name two or three and ask" in prompt
+    assert "never silently pick one" in prompt
+    assert "closest real item" in prompt
+
+
+def test_prompt_treats_only_caller_words_as_name_evidence():
+    from prompts import SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+
+    assert "only when the caller's own words gave it" in prompt
+    assert "is context, not evidence" in prompt
+    assert "never infer a name from the number" in prompt
+    assert "ask once" in prompt
 
 
 def test_summarizer_preserves_name_question_state_without_inventing_identity():
@@ -320,3 +346,78 @@ def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):
     assert out["order_ready"] is False
     assert out["order"] is None
     assert out["tools_called"] is False
+
+
+
+def test_the_production_leak_shape_is_unrepresentable():
+    """Prose followed by the control object cannot satisfy the schema.
+
+    This is the failure that reached a caller: the model emitted
+    `What kind of cake would you like? {"call_ended":false,...}`, which the old
+    parser could not decode and therefore spoke verbatim. Structured Outputs
+    removes the failure class rather than catching it, so the assertion here is
+    that the shape is rejected — there is no fallback path left to test.
+    """
+    import pytest
+    from pydantic import ValidationError
+
+    leaked = 'What kind of cake would you like? {"call_ended":false}'
+    with pytest.raises(ValidationError):
+        CallResponse.model_validate_json(leaked)
+
+
+def test_validated_response_puts_only_speech_on_the_answer_field():
+    out = parse_model_response(CallResponse.model_validate_json(
+        _raw("What kind of cake would you like?")
+    ))
+    assert out["answer"] == "What kind of cake would you like?"
+    assert "{" not in out["answer"]
+    assert out["call_ended"] is False
+    assert out["order_ready"] is False
+    assert out["order"] is None
+
+
+def test_order_is_part_of_the_structured_contract():
+    """order travels in the schema, null until a pickup order is ready."""
+    from openai.lib._pydantic import to_strict_json_schema
+
+    schema = to_strict_json_schema(CallResponse)
+    assert "order" in schema["properties"]
+    assert "order" in schema["required"]
+
+    empty = CallResponse.model_validate_json(_raw("Anything else?"))
+    assert empty.order is None
+
+
+def test_a_ready_order_carries_items_and_totals():
+    payload = json.loads(_raw("Thanks, ready in twenty minutes.",
+                              call_ended=True, order_ready=True,
+                              order_type="pickup", tools_called=True,
+                              name="Priya"))
+    payload["order"] = {
+        "customer_name": "Priya", "fulfillment": "pickup",
+        "items": [{"name": "Samosa", "quantity": 2,
+                   "unit_price": 5.99, "line_total": 11.98}],
+        "subtotal": 11.98, "tax": 0.99, "total": 12.97,
+        "preparation_minutes": 20,
+    }
+    out = parse_model_response(CallResponse.model_validate_json(json.dumps(payload)))
+
+    assert out["order"]["customer_name"] == "Priya"
+    assert out["order"]["items"][0]["name"] == "Samosa"
+    assert out["order"]["fulfillment"] == "pickup"
+
+
+def test_delivery_cannot_be_smuggled_into_a_structured_order():
+    """fulfillment is pickup-only; delivery orders never become order_ready."""
+    import pytest
+    from pydantic import ValidationError
+
+    payload = json.loads(_raw("Done.", order_ready=True))
+    payload["order"] = {
+        "customer_name": "Priya", "fulfillment": "delivery",
+        "items": [], "subtotal": 0.0, "tax": 0.0, "total": 0.0,
+        "preparation_minutes": 20,
+    }
+    with pytest.raises(ValidationError):
+        CallResponse.model_validate_json(json.dumps(payload))

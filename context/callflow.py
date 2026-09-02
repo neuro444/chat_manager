@@ -1,39 +1,28 @@
 """Structured model-response handling for call control."""
-import json
-
+from context.response_model import CallResponse
 
 _ORDER_TYPES = {"pickup", "cake", "catering", "cake/catering", "delivery"}
 
 
-def parse_model_response(raw: str | dict) -> dict:
-    """Normalize an LLM response into the public chat-result contract."""
-    if isinstance(raw, dict):
+def parse_model_response(raw) -> dict:
+    """Normalize a model response into the public chat-result contract.
+
+    The OpenAI provider returns a schema-validated CallResponse, so there is no
+    JSON text to parse here and no malformed case to recover from — Structured
+    Outputs makes an invalid shape ungeneratable rather than merely unlikely.
+    Dicts and plain strings are still accepted for test providers and for
+    free-text callers such as the summarizer.
+    """
+    if isinstance(raw, CallResponse):
+        data = raw.model_dump()
+    elif isinstance(raw, dict):
         data = dict(raw)
     else:
-        text = (raw or "").strip()
-        if text.startswith("```json"):
-            text = text[7:]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
-        try:
-            parsed = json.loads(text)
-            data = parsed if isinstance(parsed, dict) else {"answer": text}
-        except (json.JSONDecodeError, TypeError):
-            # Safe fallback: speak the text, but never infer action flags from it.
-            data = {"answer": text}
+        # Free text is speech. It never carries control flags.
+        data = {"answer": (raw or "").strip()}
 
-    # Preserve additional JSON fields introduced by the prompt so adding a new
-    # integration signal does not require rebuilding this parser. Established
-    # control fields are still normalized below instead of trusting truthy
-    # strings or malformed values from the model.
     result = dict(data)
-    raw_order_type = str(
-        data.get("order_type") or data.get("request_type") or ""
-    ).strip().lower()
-    # Accept the legacy prompt spelling, but expose one canonical value.
-    if raw_order_type == "cake_and_catering":
-        raw_order_type = "cake/catering"
+    raw_order_type = str(data.get("order_type") or "").strip().lower()
     if data.get("order_ready") is True:
         raw_order_type = "pickup"
     result.update({

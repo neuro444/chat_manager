@@ -9,7 +9,7 @@ from service import handle_message
 def _raw(answer, **flags):
     return json.dumps({
         "answer": answer, "call_ended": False, "order_ready": False,
-        "order": None, "order_type": None, "user_name": None,
+        "order": None, "order_type": None, "user_name": None, "name": None,
         "To_manager": False, "Transfer_to_Manager": False,
         "tools_called": False, "summary": "", "verbatim_user_chat": [],
         **flags,

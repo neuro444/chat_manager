@@ -8,6 +8,10 @@ Assistants API sunsets in H1 2026). Differences that matter here:
   - `.output_text` aggregates the reply text
   - streaming emits typed events; text arrives on `response.output_text.delta`
 
+Non-streaming turns use `responses.parse(text_format=CallResponse)`, so the
+model's output is schema-constrained and arrives already validated. Callers
+receive a CallResponse, never raw text to be parsed.
+
 Key is read from OPENAI_API_KEY in the environment only.
 """
 import json
@@ -17,6 +21,7 @@ from typing import Iterator
 from openai import APIError, OpenAI, RateLimitError
 
 import config
+from context.response_model import CallResponse
 
 
 def split_instructions(messages: list[dict]) -> tuple[str, list[dict]]:
@@ -59,19 +64,26 @@ class OpenAIProvider:
             self.last_usage[key] += usage[key]
 
     def _create(self, messages: list[dict], stream: bool = False, tools=None):
+        """Structured Outputs call. `parse` constrains generation to CallResponse.
+
+        Streaming cannot be schema-constrained the same way, so it stays on
+        `create`; see `stream` below for why that is safe here.
+        """
         instructions, turns = split_instructions(messages)
-        return self.client.responses.create(
+        kwargs = dict(
             model=self.model,
             instructions=instructions or None,
             input=turns,
             temperature=config.TEMPERATURE,
             max_output_tokens=config.MAX_TOKENS,
             store=False,          # we own persistence; don't retain server-side
-            stream=stream,
             **({"tools": tools} if tools else {}),
         )
+        if stream:
+            return self.client.responses.create(stream=True, **kwargs)
+        return self.client.responses.parse(text_format=CallResponse, **kwargs)
 
-    def complete(self, messages: list[dict], tools=None, **kw) -> str:
+    def complete(self, messages: list[dict], tools=None, **kw) -> CallResponse:
         self.last_tools_called = False
         self.last_tool_results = []
         self.last_usage = None
@@ -82,14 +94,14 @@ class OpenAIProvider:
                     return self._complete_with_tools(messages, tools)
                 response = self._create(messages)
                 self._record_usage(response)
-                return response.output_text or ""
+                return response.output_parsed
             except (RateLimitError, APIError) as err:
                 last_err = err
                 if attempt < config.MAX_RETRIES - 1:
                     time.sleep(2**attempt)
         raise RuntimeError(f"LLM unavailable after retries: {last_err}")
 
-    def _complete_with_tools(self, messages: list[dict], tools) -> str:
+    def _complete_with_tools(self, messages: list[dict], tools) -> CallResponse:
         """One round of tool use: call, run any tool, feed results back."""
         from orders.tools import TOOL_SCHEMAS, run_tool
 
@@ -99,7 +111,7 @@ class OpenAIProvider:
         calls = [o for o in (resp.output or [])
                  if getattr(o, "type", "") == "function_call"]
         if not calls:
-            return resp.output_text or ""
+            return resp.output_parsed
 
         self.last_tools_called = True
 
@@ -119,7 +131,7 @@ class OpenAIProvider:
                           "call_id": call.call_id, "output": result})
         final = self._create(convo, tools=TOOL_SCHEMAS)
         self._record_usage(final)
-        return final.output_text or ""
+        return final.output_parsed
 
     def stream(self, messages: list[dict], **kw) -> Iterator[str]:
         # Streaming currently exposes no ordering tools, so it can never carry

@@ -7,6 +7,8 @@ boundary has leaked.
 from time import perf_counter
 import json
 
+from pydantic import BaseModel
+
 import config
 import tokens
 from context.assembler import assemble
@@ -95,6 +97,19 @@ def _complete(provider, messages):
         return provider.complete(messages, tools=TOOL_SCHEMAS)
     except TypeError:
         return provider.complete(messages)      # providers without tool support
+
+
+def _response_text(raw) -> str:
+    """The generated text behind a response, for token counting and debug logs.
+
+    Structured Outputs hands back a validated object rather than a string, but
+    what was generated (and billed) is still its JSON serialization.
+    """
+    if isinstance(raw, BaseModel):
+        return raw.model_dump_json()
+    if isinstance(raw, dict):
+        return json.dumps(raw)
+    return raw or ""
 
 
 def _llm_debug_payload(messages, raw):
@@ -259,8 +274,9 @@ def handle_message(
     llm_started = perf_counter()
     raw = _complete(provider, messages)
     llm_latency_ms = round((perf_counter() - llm_started) * 1000, 2)
-    token_usage = tokens.report(messages, raw, provider, config.LLM_MODEL)
-    _debug(f"[llm_raw_response] session_id={session_id} response={raw!r}")
+    raw_text = _response_text(raw)
+    token_usage = tokens.report(messages, raw_text, provider, config.LLM_MODEL)
+    _debug(f"[llm_raw_response] session_id={session_id} response={raw_text!r}")
     print(
         f"[llm_call_complete] session_id={session_id} "
         f"model={token_usage['model_used']} "
@@ -284,7 +300,7 @@ def handle_message(
     to_manager = parsed["To_manager"]
     extensions = _response_extensions(parsed)
     answer = parsed["answer"]
-    llm_debug = _llm_debug_payload(messages, raw)
+    llm_debug = _llm_debug_payload(messages, raw_text)
     tts_chars = tokens.count_tts_chars(answer)
     _finish_turn(
         repo, provider, session_id, user_message, answer, is_first,
