@@ -185,3 +185,27 @@ def test_history_budget_leaves_room_for_a_long_call():
     assert len(SYSTEM_PROMPT) // 4 < 5_000
     # Before the cut this retained well under 100 turns.
     assert len(kept) > 120, f"only {len(kept)} turns survived assembly"
+
+
+def test_a_known_caller_name_survives_a_long_ordering_call(repo):
+    """From the live 2026-09-02 call: Divya greeted "Hi Radha", then asked.
+
+    The name was never lost — it was in context the whole call, which is why the
+    greeting used it. The old NAMES rule told the model that a name from an
+    earlier call was not usable evidence, so it asked anyway, and a non-answer
+    ("mine") produced a second ask. This asserts the name stays reachable across
+    a long call; the prompt rules above decide what is done with it.
+    """
+    turns = ["hello", "I would like to place an order for pickup",
+             "two butter chicken masala", "two malabar chicken biriyani",
+             "one egg biriyani", "one chicken kondattam", "thank you"]
+    replies = [_reply("Hi Radha, I'm Divya.", user_name="Radha"),
+               _reply("What would you like to order for pickup?",
+                      order_type="pickup", user_name="Radha")]
+    replies += [_reply("Noted. Anything else?", order_type="pickup",
+                       user_name="Radha") for _ in range(len(turns) - 2)]
+
+    provider, results = _run(repo, turns, replies, user="+15550199")
+
+    assert "Radha" in provider.prompts[-1]
+    assert results[-1]["user_name"] == "Radha"

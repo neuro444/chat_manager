@@ -317,14 +317,47 @@ def test_prompt_offers_several_matches_instead_of_choosing_one():
     assert "closest real item" in prompt
 
 
-def test_prompt_treats_only_caller_words_as_name_evidence():
+def test_a_known_name_is_reused_instead_of_asked_for_again():
+    """A name from history is enough for a pickup order.
+
+    The previous rule treated a name from an earlier call as "context, not
+    evidence", which contradicted the pickup flow's "only ask if you do not
+    already know it" and made Divya re-ask returning callers every call. The
+    shared-family-phone concern now applies only to cake/catering callbacks,
+    where the manager phones the person later and no one is there to correct it.
+    """
     from prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
-    assert "only when the caller's own words gave it" in prompt
-    assert "is context, not evidence" in prompt
-    assert "never infer a name from the number" in prompt
-    assert "ask once" in prompt
+    assert "from this call or from their history" in prompt
+    assert "do not ask for it again" in prompt
+    assert "Knowing it is enough for a pickup order" in prompt
+    # A different name supplied by the caller still wins.
+    assert "the new name replaces the old" in prompt
+    # The deleted rule must not creep back.
+    assert "is context, not evidence" not in prompt
+
+
+def test_a_non_answer_to_the_name_question_does_not_trigger_a_second_ask():
+    """"mine" is not a name, but it spends the one question.
+
+    In the live call the caller answered "mine" and Divya asked again, which
+    step 4 forbids.
+    """
+    from prompts import SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+
+    assert "at most once in a call" in prompt
+    assert "is not actually a name" in prompt
+    assert "do not ask again; use no_name_given" in prompt
+
+
+def test_callback_names_still_guard_against_shared_family_phones():
+    from prompts import SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+
+    assert "cake or catering callback" in prompt
+    assert "two different callers' names" in prompt
 
 
 def test_summarizer_preserves_name_question_state_without_inventing_identity():
