@@ -317,6 +317,27 @@ def test_prompt_offers_several_matches_instead_of_choosing_one():
     assert "closest real item" in prompt
 
 
+def test_callback_speech_fragments_get_one_retry_then_handoff():
+    from prompts import SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+
+    assert "A broken or cut-off stretch of speech is not an order detail" in prompt
+    assert "Do not quote, complete, or assign meaning to the broken words" in prompt
+    assert "If the next attempt still does not come through clearly, do not ask again" in prompt
+    assert "pass their contact to the manager for a callback" in prompt
+    assert "A fragment that does not change the understood request needs no follow-up" in prompt
+    assert "A cake or catering callback can be completed with partial details" in prompt
+
+
+def test_callback_fragment_few_shots_cover_retry_and_ignore_paths():
+    from prompts import SYSTEM_PROMPT
+    prompt = " ".join(SYSTEM_PROMPT.split())
+
+    assert "Speech that does not come through during a manager callback" in prompt
+    assert "Your speech still did not come through clearly" in prompt
+    assert "A stray fragment does not displace a complete request" in prompt
+
+
 def test_a_known_name_is_reused_instead_of_asked_for_again():
     """A name from history is enough for a pickup order.
 
