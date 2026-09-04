@@ -89,3 +89,13 @@ PORT = _int("PORT", 8000)
 # unaffected; set it in production, where the API is reachable over the network.
 API_KEY = os.getenv("API_KEY", "")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
+
+# ── Cost monitoring ───────────────────
+# Where the internal cost-api service (observe_repo) is reachable. The proxy
+# only forwards GET requests to an allowlisted set of read-only paths.
+COST_API_URL = os.getenv("COST_API_URL", "http://127.0.0.1:8005")
+# PIN gating the dashboard's Cost tab, checked server-side (see cost_proxy.py's
+# /cost/pin-check) so the value itself never ships to the browser. Still a
+# soft deterrent, not real security: anyone with dashboard access already
+# passes require_api_key and can call /cost/api/* directly, PIN or not.
+COST_MONITOR_PIN = os.getenv("COST_MONITOR_PIN", "")

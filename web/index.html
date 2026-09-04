@@ -9,6 +9,10 @@
 <body>
 <header class="topbar">
   <div class="brand">📞 Phone Orders <span class="sub">staff dashboard</span></div>
+  <nav class="tabs">
+    <button id="tab-orders" class="tab active">Orders</button>
+    <button id="tab-cost" class="tab">Cost</button>
+  </nav>
   <div class="tools">
     <input id="caller-search" class="top-search" placeholder="Search callers…">
     <input id="global-search" class="top-search" placeholder="Search all conversations…">
@@ -17,7 +21,7 @@
   </div>
 </header>
 
-<main class="grid">
+<main id="view-orders" class="grid">
   <aside class="pane callers">
     <h2>Callers</h2>
     <div id="callers" class="list"></div>
@@ -66,6 +70,35 @@
       <button type="submit" id="send">Send</button>
     </form>
   </section>
+</main>
+
+<main id="view-cost" class="cost-view hidden">
+  <div id="cost-pin-gate" class="pin-gate hidden">
+    <div class="pin-box">
+      <h2>Cost Monitor</h2>
+      <p class="muted">Enter PIN to continue.</p>
+      <input id="cost-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="off">
+      <button id="cost-pin-submit" class="newbtn">Unlock</button>
+      <p id="cost-pin-error" class="pin-error hidden">Incorrect PIN.</p>
+    </div>
+  </div>
+
+  <div id="cost-content" class="cost-content hidden">
+    <section class="pane cost-summary">
+      <h2>Today</h2>
+      <div id="cost-today" class="cost-cards"></div>
+    </section>
+
+    <section class="pane cost-calls">
+      <h2>Recent calls</h2>
+      <div id="cost-calls-table" class="cost-table"></div>
+    </section>
+
+    <section id="cost-drilldown" class="pane cost-drilldown hidden">
+      <h2>Call detail <button id="cost-drilldown-close" class="copy-btn" title="Close">✕</button></h2>
+      <pre id="cost-drilldown-body"></pre>
+    </section>
+  </div>
 </main>
 
 <script src="/app.js"></script>
