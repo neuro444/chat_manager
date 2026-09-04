@@ -25,6 +25,7 @@ def pin_check(pin: str = "") -> dict:
 
 _ALLOWED = {
     "internal/costs/daily",
+    "internal/costs/breakdown",
     "internal/calls",
     "internal/reviews",
     "internal/price-checks",

@@ -52,6 +52,14 @@ def test_call_drilldown_path_is_forwarded(client, keyed, monkeypatch):
     assert resp.json()["call_id"] == "abc"
 
 
+def test_breakdown_path_is_forwarded(client, keyed, monkeypatch):
+    _mock_upstream(monkeypatch, content=b'{"group_by":"day","periods":[]}')
+    resp = client.get("/cost/api/internal/costs/breakdown", headers=keyed,
+                       params={"group_by": "day"})
+    assert resp.status_code == 200
+    assert resp.json()["group_by"] == "day"
+
+
 def test_disallowed_path_returns_404(client, keyed, monkeypatch):
     _mock_upstream(monkeypatch)
     resp = client.get("/cost/api/internal/cost-events", headers=keyed)

@@ -414,20 +414,40 @@ function showView(view) {
   $("tab-cost").classList.toggle("active", view === "cost");
 }
 
+function unlockedInThisBrowser() {
+  return localStorage.getItem(COST_PIN_STORAGE_KEY) === "1";
+}
+
+function enterCostTab() {
+  $("cost-pin-gate").classList.add("hidden");
+  $("cost-content").classList.remove("hidden");
+  if (!costLoaded) loadCostView();
+}
+
+function promptForPin() {
+  $("cost-content").classList.add("hidden");
+  $("cost-pin-gate").classList.remove("hidden");
+  $("cost-pin-error").classList.add("hidden");
+  $("cost-pin-input").value = "";
+  $("cost-pin-input").focus();
+}
+
 $("tab-orders").onclick = () => showView("orders");
-$("tab-cost").onclick = () => {
+$("tab-cost").onclick = async () => {
   showView("cost");
-  if (localStorage.getItem(COST_PIN_STORAGE_KEY) === "1") {
-    $("cost-pin-gate").classList.add("hidden");
-    $("cost-content").classList.remove("hidden");
-    if (!costLoaded) loadCostView();
-  } else {
-    $("cost-content").classList.add("hidden");
-    $("cost-pin-gate").classList.remove("hidden");
-    $("cost-pin-error").classList.add("hidden");
-    $("cost-pin-input").value = "";
-    $("cost-pin-input").focus();
-  }
+  if (unlockedInThisBrowser()) { enterCostTab(); return; }
+  // No local unlock on record yet -- ask the server whether a PIN is even
+  // required before showing the prompt, so a dashboard with no PIN configured
+  // never blocks on one.
+  try {
+    const { pin_required } = await api("/cost/pin-check");
+    if (!pin_required) {
+      localStorage.setItem(COST_PIN_STORAGE_KEY, "1");
+      enterCostTab();
+      return;
+    }
+  } catch { /* fall through to the PIN prompt if the check itself fails */ }
+  promptForPin();
 };
 
 async function unlockCostTab() {
@@ -440,9 +460,7 @@ async function unlockCostTab() {
       return;
     }
     localStorage.setItem(COST_PIN_STORAGE_KEY, "1");
-    $("cost-pin-gate").classList.add("hidden");
-    $("cost-content").classList.remove("hidden");
-    if (!costLoaded) loadCostView();
+    enterCostTab();
   } catch {
     $("cost-pin-error").textContent = "Could not verify PIN.";
     $("cost-pin-error").classList.remove("hidden");
@@ -453,9 +471,95 @@ $("cost-pin-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); unlockCostTab(); }
 });
 
+// ── cost filters + sort state ────────────
+const costState = {
+  range: "today",       // today | 7d | 30d | month | year | custom
+  startDate: null,       // yyyy-mm-dd, set for custom or derived from preset
+  endDate: null,
+  provider: "",
+  groupBy: "day",        // day | month | year, for the breakdown table
+  calls: [],
+  sortKey: "started_at",
+  sortDir: "desc",
+};
+
+function isoDate(d) { return d.toISOString().slice(0, 10); }
+
+function computeRangeDates(range) {
+  const today = new Date();
+  const end = isoDate(today);
+  if (range === "today") return { start: end, end };
+  if (range === "7d") {
+    const d = new Date(today); d.setUTCDate(d.getUTCDate() - 6);
+    return { start: isoDate(d), end };
+  }
+  if (range === "30d") {
+    const d = new Date(today); d.setUTCDate(d.getUTCDate() - 29);
+    return { start: isoDate(d), end };
+  }
+  if (range === "month") {
+    const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    return { start: isoDate(d), end };
+  }
+  if (range === "year") {
+    const d = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
+    return { start: isoDate(d), end };
+  }
+  return { start: costState.startDate, end: costState.endDate };
+}
+
+function applyRangePreset(range) {
+  costState.range = range;
+  document.querySelectorAll("#cost-date-presets .filter-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.range === range);
+  });
+  $("cost-custom-range").classList.toggle("hidden", range !== "custom");
+  if (range === "custom") {
+    if (!costState.startDate || !costState.endDate) return; // wait for Apply
+  }
+  const { start, end } = computeRangeDates(range);
+  costState.startDate = start;
+  costState.endDate = end;
+  refreshCostData();
+}
+
+document.querySelectorAll("#cost-date-presets .filter-btn").forEach((btn) => {
+  btn.onclick = () => applyRangePreset(btn.dataset.range);
+});
+
+$("cost-custom-apply").onclick = () => {
+  const start = $("cost-range-start").value;
+  const end = $("cost-range-end").value;
+  if (!start || !end) return;
+  costState.startDate = start;
+  costState.endDate = end;
+  refreshCostData();
+};
+
+$("cost-provider-filter").onchange = (e) => {
+  costState.provider = e.target.value;
+  refreshCostData();
+};
+
+document.querySelectorAll("#cost-group-toggle .filter-btn").forEach((btn) => {
+  btn.onclick = () => {
+    costState.groupBy = btn.dataset.group;
+    document.querySelectorAll("#cost-group-toggle .filter-btn").forEach((b) =>
+      b.classList.toggle("active", b === btn));
+    loadCostBreakdownAndSummary();
+  };
+});
+
 async function loadCostView() {
   costLoaded = true;
-  await Promise.all([loadCostToday(), loadCostCalls()]);
+  const { start, end } = computeRangeDates(costState.range);
+  costState.startDate = start;
+  costState.endDate = end;
+  await refreshCostData();
+}
+
+async function refreshCostData() {
+  await Promise.all([loadCostToday(), loadCostCalls(), loadCostBreakdownAndSummary()]);
 }
 
 async function loadCostToday() {
@@ -483,60 +587,197 @@ async function loadCostToday() {
       box.appendChild(card);
     });
   } catch (err) {
-    box.innerHTML = "";
-    const message = document.createElement("div");
-    message.className = "empty";
-    message.textContent = `Cost data unavailable (${err.message}).`;
-    box.appendChild(message);
+    renderEmpty(box, `Cost data unavailable (${err.message}).`);
   }
+}
+
+function renderEmpty(box, text) {
+  box.innerHTML = "";
+  const message = document.createElement("div");
+  message.className = "empty";
+  message.textContent = text;
+  box.appendChild(message);
+}
+
+const CALLS_COLUMNS = [
+  { key: "started_at", label: "Started" },
+  { key: "status", label: "Status" },
+  { key: "providers", label: "Providers" },
+  { key: "total_input_tokens", label: "Input tokens" },
+  { key: "total_output_tokens", label: "Output tokens" },
+  { key: "total_cost_usd", label: "Cost" },
+];
+
+function sortCalls(calls) {
+  const { sortKey, sortDir } = costState;
+  const dir = sortDir === "asc" ? 1 : -1;
+  return [...calls].sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (sortKey === "providers") { av = (av || []).join(", "); bv = (bv || []).join(", "); }
+    if (sortKey === "total_cost_usd") { av = Number(av); bv = Number(bv); }
+    if (av == null) av = "";
+    if (bv == null) bv = "";
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
 }
 
 async function loadCostCalls() {
   const box = $("cost-calls-table");
   box.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    const data = await api("/cost/api/internal/calls");
-    const calls = data.calls || [];
-    if (!calls.length) { box.innerHTML = '<div class="empty">No calls yet.</div>'; return; }
-    box.innerHTML = "";
-    const table = document.createElement("table");
-    const thead = document.createElement("thead");
-    const headRow = document.createElement("tr");
-    ["Started", "Status", "Providers", "Tokens (in/out)", "Cost"].forEach((h) => {
-      const th = document.createElement("th");
-      th.textContent = h;
-      headRow.appendChild(th);
+    const params = new URLSearchParams({
+      start_date: costState.startDate, end_date: costState.endDate, limit: "200",
     });
-    thead.appendChild(headRow);
-    table.appendChild(thead);
-    const tbody = document.createElement("tbody");
-    calls.forEach((c) => {
-      const tr = document.createElement("tr");
-      tr.className = "cost-row";
-      const cells = [
-        fmtTime(c.started_at),
-        c.status,
-        (c.providers || []).join(", "),
-        `${c.total_input_tokens ?? 0} / ${c.total_output_tokens ?? 0}`,
-        fmtUsd(c.total_cost_usd),
-      ];
-      cells.forEach((text) => {
-        const td = document.createElement("td");
-        td.textContent = text;
-        tr.appendChild(td);
-      });
-      tr.onclick = () => openCostDrilldown(c.call_id);
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    box.appendChild(table);
+    if (costState.provider) params.set("provider", costState.provider);
+    const data = await api(`/cost/api/internal/calls?${params}`);
+    costState.calls = data.calls || [];
+    renderCostCallsTable();
   } catch (err) {
-    box.innerHTML = "";
-    const message = document.createElement("div");
-    message.className = "empty";
-    message.textContent = `Cost data unavailable (${err.message}).`;
-    box.appendChild(message);
+    renderEmpty(box, `Cost data unavailable (${err.message}).`);
   }
+}
+
+function renderCostCallsTable() {
+  const box = $("cost-calls-table");
+  const calls = sortCalls(costState.calls);
+  if (!calls.length) { renderEmpty(box, "No calls in this range."); return; }
+  box.innerHTML = "";
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  CALLS_COLUMNS.forEach((col) => {
+    const th = document.createElement("th");
+    th.className = "sortable";
+    const isActive = costState.sortKey === col.key;
+    th.textContent = col.label + (isActive ? (costState.sortDir === "asc" ? " ▲" : " ▼") : "");
+    th.onclick = () => {
+      if (costState.sortKey === col.key) {
+        costState.sortDir = costState.sortDir === "asc" ? "desc" : "asc";
+      } else {
+        costState.sortKey = col.key;
+        costState.sortDir = "asc";
+      }
+      renderCostCallsTable();
+    };
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  calls.forEach((c) => {
+    const tr = document.createElement("tr");
+    tr.className = "cost-row";
+    const cells = [
+      fmtTime(c.started_at),
+      c.status,
+      (c.providers || []).join(", "),
+      String(c.total_input_tokens ?? 0),
+      String(c.total_output_tokens ?? 0),
+      fmtUsd(c.total_cost_usd),
+    ];
+    cells.forEach((text) => {
+      const td = document.createElement("td");
+      td.textContent = text;
+      tr.appendChild(td);
+    });
+    tr.onclick = () => openCostDrilldown(c.call_id);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  box.appendChild(table);
+}
+
+function renderCostSummary(summary) {
+  const box = $("cost-summary-panel");
+  box.innerHTML = "";
+  const rows = [
+    ["Total cost", fmtUsd(summary.total_cost_usd)],
+    ["Calls", String(summary.call_count)],
+    ["Avg cost / call", fmtUsd(summary.avg_cost_per_call_usd)],
+    ["OpenAI", fmtUsd(summary.openai_cost_usd)],
+    ["ElevenLabs", fmtUsd(summary.elevenlabs_cost_usd)],
+    ["Plivo", fmtUsd(summary.plivo_cost_usd)],
+    ["Fixed (server)", fmtUsd(summary.fixed_cost_usd)],
+  ];
+  rows.forEach(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "cost-summary-row";
+    const labelEl = document.createElement("span");
+    labelEl.className = "cost-summary-label";
+    labelEl.textContent = label;
+    const valueEl = document.createElement("span");
+    valueEl.className = "cost-summary-value";
+    valueEl.textContent = value;
+    row.append(labelEl, valueEl);
+    box.appendChild(row);
+  });
+}
+
+const BREAKDOWN_COLUMNS = [
+  ["period", "Date"], ["call_count", "Calls"], ["openai_cost_usd", "OpenAI"],
+  ["elevenlabs_cost_usd", "ElevenLabs"], ["plivo_cost_usd", "Plivo"],
+  ["fixed_cost_usd", "Fixed"], ["total_cost_usd", "Total"],
+];
+
+async function loadCostBreakdownAndSummary() {
+  const summaryBox = $("cost-summary-panel");
+  const box = $("cost-breakdown-table");
+  summaryBox.innerHTML = '<div class="empty">Loading…</div>';
+  box.innerHTML = '<div class="empty">Loading…</div>';
+  let data;
+  try {
+    const params = new URLSearchParams({
+      group_by: costState.groupBy, start_date: costState.startDate, end_date: costState.endDate,
+    });
+    data = await api(`/cost/api/internal/costs/breakdown?${params}`);
+  } catch (err) {
+    renderEmpty(summaryBox, `Summary unavailable (${err.message}).`);
+    renderEmpty(box, `Breakdown unavailable (${err.message}).`);
+    return;
+  }
+  renderCostSummary(data.summary);
+  const periods = data.periods || [];
+  if (!periods.length) { renderEmpty(box, "No cost data in this range."); return; }
+  box.innerHTML = "";
+  const table = document.createElement("table");
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  BREAKDOWN_COLUMNS.forEach(([, label]) => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  periods.slice().reverse().forEach((p) => {
+    const tr = document.createElement("tr");
+    tr.className = "cost-row";
+    BREAKDOWN_COLUMNS.forEach(([key]) => {
+      const td = document.createElement("td");
+      if (key === "period") td.textContent = p.period;
+      else if (key === "call_count") td.textContent = String(p.call_count);
+      else td.textContent = fmtUsd(p[key]);
+      tr.appendChild(td);
+    });
+    tr.onclick = () => {
+      if (costState.groupBy !== "day") return;
+      costState.range = "custom";
+      costState.startDate = p.period;
+      costState.endDate = p.period;
+      document.querySelectorAll("#cost-date-presets .filter-btn").forEach((btn) =>
+        btn.classList.toggle("active", btn.dataset.range === "custom"));
+      $("cost-custom-range").classList.remove("hidden");
+      $("cost-range-start").value = p.period;
+      $("cost-range-end").value = p.period;
+      refreshCostData();
+    };
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  box.appendChild(table);
 }
 
 async function openCostDrilldown(callId) {
