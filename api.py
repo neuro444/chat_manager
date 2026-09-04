@@ -546,3 +546,10 @@ def appjs():
 @app.get("/style.css")
 def appcss():
     return FileResponse(WEB / "style.css", media_type="text/css")
+
+
+# Imported at the bottom, not the top: cost_proxy imports require_api_key
+# from this module, so importing it earlier would be circular.
+from cost_proxy import router as cost_router  # noqa: E402
+
+app.include_router(cost_router)

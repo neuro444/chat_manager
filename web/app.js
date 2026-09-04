@@ -397,3 +397,158 @@ $("mic").onclick = async () => {
 
 loadCallers().then(() => setStatus("ready"));
 setInterval(() => { if (!document.hidden) loadCallers(); }, 10000);
+
+// ── cost monitor ─────────────────────────
+const COST_PIN_STORAGE_KEY = "cost-monitor-unlocked";
+let costLoaded = false;
+
+function fmtUsd(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? `$${n.toFixed(2)}` : "—";
+}
+
+function showView(view) {
+  $("view-orders").classList.toggle("hidden", view !== "orders");
+  $("view-cost").classList.toggle("hidden", view !== "cost");
+  $("tab-orders").classList.toggle("active", view === "orders");
+  $("tab-cost").classList.toggle("active", view === "cost");
+}
+
+$("tab-orders").onclick = () => showView("orders");
+$("tab-cost").onclick = () => {
+  showView("cost");
+  if (localStorage.getItem(COST_PIN_STORAGE_KEY) === "1") {
+    $("cost-pin-gate").classList.add("hidden");
+    $("cost-content").classList.remove("hidden");
+    if (!costLoaded) loadCostView();
+  } else {
+    $("cost-content").classList.add("hidden");
+    $("cost-pin-gate").classList.remove("hidden");
+    $("cost-pin-error").classList.add("hidden");
+    $("cost-pin-input").value = "";
+    $("cost-pin-input").focus();
+  }
+};
+
+async function unlockCostTab() {
+  const entered = $("cost-pin-input").value.trim();
+  try {
+    const { pin_required, correct } = await api(
+      `/cost/pin-check?pin=${encodeURIComponent(entered)}`);
+    if (pin_required && !correct) {
+      $("cost-pin-error").classList.remove("hidden");
+      return;
+    }
+    localStorage.setItem(COST_PIN_STORAGE_KEY, "1");
+    $("cost-pin-gate").classList.add("hidden");
+    $("cost-content").classList.remove("hidden");
+    if (!costLoaded) loadCostView();
+  } catch {
+    $("cost-pin-error").textContent = "Could not verify PIN.";
+    $("cost-pin-error").classList.remove("hidden");
+  }
+}
+$("cost-pin-submit").onclick = unlockCostTab;
+$("cost-pin-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); unlockCostTab(); }
+});
+
+async function loadCostView() {
+  costLoaded = true;
+  await Promise.all([loadCostToday(), loadCostCalls()]);
+}
+
+async function loadCostToday() {
+  const box = $("cost-today");
+  box.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const d = await api("/cost/api/internal/costs/daily");
+    box.innerHTML = "";
+    const cards = [
+      ["Phone", fmtUsd(d.phone_cost_usd)],
+      ["WhatsApp", "not yet tracked"],
+      ["Fixed (server)", fmtUsd(d.fixed_cost_usd)],
+      ["Total today", fmtUsd(d.total_cost_usd)],
+    ];
+    cards.forEach(([label, value]) => {
+      const card = document.createElement("div");
+      card.className = "cost-card";
+      const labelEl = document.createElement("div");
+      labelEl.className = "cost-card-label";
+      labelEl.textContent = label;
+      const valueEl = document.createElement("div");
+      valueEl.className = "cost-card-value";
+      valueEl.textContent = value;
+      card.append(labelEl, valueEl);
+      box.appendChild(card);
+    });
+  } catch (err) {
+    box.innerHTML = "";
+    const message = document.createElement("div");
+    message.className = "empty";
+    message.textContent = `Cost data unavailable (${err.message}).`;
+    box.appendChild(message);
+  }
+}
+
+async function loadCostCalls() {
+  const box = $("cost-calls-table");
+  box.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const data = await api("/cost/api/internal/calls");
+    const calls = data.calls || [];
+    if (!calls.length) { box.innerHTML = '<div class="empty">No calls yet.</div>'; return; }
+    box.innerHTML = "";
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    ["Started", "Status", "Providers", "Tokens (in/out)", "Cost"].forEach((h) => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    const tbody = document.createElement("tbody");
+    calls.forEach((c) => {
+      const tr = document.createElement("tr");
+      tr.className = "cost-row";
+      const cells = [
+        fmtTime(c.started_at),
+        c.status,
+        (c.providers || []).join(", "),
+        `${c.total_input_tokens ?? 0} / ${c.total_output_tokens ?? 0}`,
+        fmtUsd(c.total_cost_usd),
+      ];
+      cells.forEach((text) => {
+        const td = document.createElement("td");
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      tr.onclick = () => openCostDrilldown(c.call_id);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    box.appendChild(table);
+  } catch (err) {
+    box.innerHTML = "";
+    const message = document.createElement("div");
+    message.className = "empty";
+    message.textContent = `Cost data unavailable (${err.message}).`;
+    box.appendChild(message);
+  }
+}
+
+async function openCostDrilldown(callId) {
+  const panel = $("cost-drilldown");
+  const body = $("cost-drilldown-body");
+  panel.classList.remove("hidden");
+  body.textContent = "Loading…";
+  try {
+    const detail = await api(`/cost/api/internal/calls/${encodeURIComponent(callId)}`);
+    body.textContent = JSON.stringify(detail, null, 2);
+  } catch (err) {
+    body.textContent = `Unavailable: ${err.message}`;
+  }
+}
+$("cost-drilldown-close").onclick = () => $("cost-drilldown").classList.add("hidden");

@@ -106,3 +106,11 @@ DISCLOSURE_LINE = os.getenv(
     "DISCLOSURE_LINE",
     "This call may be recorded and processed by our ordering assistant.",
 )
+
+# ── Cost monitoring ───────────────────
+# Production containers should override this with the cost-api service URL on
+# their shared Docker network (http://neuroheart-cost-api:8000).
+COST_API_URL = os.getenv("COST_API_URL", "http://127.0.0.1:8005")
+# Optional soft gate for the dashboard Cost tab; existing dashboard auth still
+# protects the underlying API routes.
+COST_MONITOR_PIN = os.getenv("COST_MONITOR_PIN", "")
