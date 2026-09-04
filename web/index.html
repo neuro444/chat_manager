@@ -89,10 +89,54 @@
       <div id="cost-today" class="cost-cards"></div>
     </section>
 
-    <section class="pane cost-calls">
-      <h2>Recent calls</h2>
-      <div id="cost-calls-table" class="cost-table"></div>
-    </section>
+    <div class="cost-filters">
+      <div class="cost-filter-presets" id="cost-date-presets">
+        <button class="filter-btn active" data-range="today">Today</button>
+        <button class="filter-btn" data-range="7d">Last 7 days</button>
+        <button class="filter-btn" data-range="30d">Last 30 days</button>
+        <button class="filter-btn" data-range="month">This month</button>
+        <button class="filter-btn" data-range="year">This year</button>
+        <button class="filter-btn" data-range="custom">Custom…</button>
+      </div>
+      <div id="cost-custom-range" class="cost-custom-range hidden">
+        <input type="date" id="cost-range-start">
+        <span class="muted">to</span>
+        <input type="date" id="cost-range-end">
+        <button id="cost-custom-apply" class="newbtn">Apply</button>
+      </div>
+      <select id="cost-provider-filter" class="cost-provider-select">
+        <option value="">All providers</option>
+        <option value="openai">OpenAI</option>
+        <option value="elevenlabs">ElevenLabs</option>
+        <option value="plivo">Plivo</option>
+      </select>
+    </div>
+
+    <div class="cost-main-grid">
+      <div class="cost-main-col">
+        <section class="pane cost-breakdown">
+          <div class="cost-breakdown-header">
+            <h2>Breakdown</h2>
+            <div class="cost-group-toggle" id="cost-group-toggle">
+              <button class="filter-btn active" data-group="day">Daily</button>
+              <button class="filter-btn" data-group="month">Monthly</button>
+              <button class="filter-btn" data-group="year">Yearly</button>
+            </div>
+          </div>
+          <div id="cost-breakdown-table" class="cost-table"></div>
+        </section>
+
+        <section class="pane cost-calls">
+          <h2>Calls</h2>
+          <div id="cost-calls-table" class="cost-table"></div>
+        </section>
+      </div>
+
+      <aside class="pane cost-sidebar">
+        <h2>Summary</h2>
+        <div id="cost-summary-panel" class="cost-summary-panel"></div>
+      </aside>
+    </div>
 
     <section id="cost-drilldown" class="pane cost-drilldown hidden">
       <h2>Call detail <button id="cost-drilldown-close" class="copy-btn" title="Close">✕</button></h2>
