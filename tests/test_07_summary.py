@@ -6,13 +6,25 @@ from providers.fake_provider import FakeProvider
 from service import build_context, handle_message
 
 
+@pytest.fixture
+def small_window(monkeypatch):
+    """Pin the window so these tests exercise rolling, not the shipped default.
+
+    A roll only happens once messages fall outside HISTORY_WINDOW. With the
+    production default at 200, a 15-turn fixture never overflows, so these
+    tests must set their own window to assert the mechanism.
+    """
+    monkeypatch.setattr(config, "HISTORY_WINDOW", 10)
+    return 10
+
+
 def test_no_summary_for_short_conversation(repo):
     handle_message(repo, FakeProvider(), "u1", None, "hi")
     sid = repo.list_sessions("u1")[0].session_id
     assert repo.get_session(sid).running_summary == ""
 
 
-def test_summary_rolls_after_threshold(repo):
+def test_summary_rolls_after_threshold(repo, small_window):
     p = FakeProvider("SUMMARY: user discussed many topics.")
     sid = handle_message(repo, p, "u1", None, "turn 0")["session_id"]
     for i in range(1, 15):
@@ -20,7 +32,7 @@ def test_summary_rolls_after_threshold(repo):
     assert repo.get_session(sid).running_summary != ""
 
 
-def test_summarized_upto_advances(repo):
+def test_summarized_upto_advances(repo, small_window):
     p = FakeProvider("a summary")
     sid = handle_message(repo, p, "u1", None, "turn 0")["session_id"]
     for i in range(1, 15):

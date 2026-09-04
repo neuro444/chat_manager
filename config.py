@@ -44,7 +44,7 @@ CHARS_PER_TOKEN = 4
 # Encoding used when the model name is not one tiktoken knows. o200k_base is
 # the current GPT-4o/5 family encoding.
 TIKTOKEN_ENCODING = os.getenv("TIKTOKEN_ENCODING", "o200k_base")
-HISTORY_WINDOW = _int("HISTORY_WINDOW", 20)
+HISTORY_WINDOW = _int("HISTORY_WINDOW", 200)
 SUMMARY_TRIGGER_EVERY = _int("SUMMARY_TRIGGER_EVERY", 10)
 CROSS_SESSION_WINDOW = _int("CROSS_SESSION_WINDOW", 5)
 CROSS_SESSION_SESSION_WINDOW = _int("CROSS_SESSION_SESSION_WINDOW", 5)
@@ -106,3 +106,11 @@ DISCLOSURE_LINE = os.getenv(
     "DISCLOSURE_LINE",
     "This call may be recorded and processed by our ordering assistant.",
 )
+
+# ── Cost monitoring ───────────────────
+# Production containers should override this with the cost-api service URL on
+# their shared Docker network (http://neuroheart-cost-api:8000).
+COST_API_URL = os.getenv("COST_API_URL", "http://127.0.0.1:8005")
+# Optional soft gate for the dashboard Cost tab; existing dashboard auth still
+# protects the underlying API routes.
+COST_MONITOR_PIN = os.getenv("COST_MONITOR_PIN", "")
