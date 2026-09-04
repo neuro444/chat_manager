@@ -84,6 +84,12 @@
   </div>
 
   <div id="cost-content" class="cost-content hidden">
+    <nav class="tabs cost-subtabs">
+      <button id="cost-subtab-overview" class="tab active">Overview</button>
+      <button id="cost-subtab-rates" class="tab">Rates</button>
+    </nav>
+
+    <div id="cost-overview">
     <section class="pane cost-summary">
       <h2>Today</h2>
       <div id="cost-today" class="cost-cards"></div>
@@ -142,6 +148,44 @@
       <h2>Call detail <button id="cost-drilldown-close" class="copy-btn" title="Close">✕</button></h2>
       <pre id="cost-drilldown-body"></pre>
     </section>
+    </div>
+
+    <div id="cost-rates" class="hidden">
+      <section class="pane rates-add">
+        <h2>Add rate</h2>
+        <form id="rate-form" class="rate-form">
+          <div class="rate-form-row">
+            <input id="rate-provider" placeholder="Provider (e.g. openai)" required>
+            <input id="rate-model" placeholder="Model (e.g. gpt-5.6-luna)" required>
+            <select id="rate-billing-unit" required>
+              <option value="">Billing unit…</option>
+              <option value="million_tokens">million_tokens (LLM)</option>
+              <option value="1k_characters">1k_characters (TTS)</option>
+              <option value="minute">minute (STT / telephony)</option>
+              <option value="message">message (WhatsApp)</option>
+            </select>
+          </div>
+          <div id="rate-fields-llm" class="rate-form-row hidden">
+            <input id="rate-input-rate" type="number" step="0.000001" placeholder="Input rate ($/1M tokens)">
+            <input id="rate-cached-rate" type="number" step="0.000001" placeholder="Cached input rate (optional)">
+            <input id="rate-output-rate" type="number" step="0.000001" placeholder="Output rate ($/1M tokens)">
+          </div>
+          <div id="rate-fields-flat" class="rate-form-row hidden">
+            <input id="rate-flat-rate" type="number" step="0.000001" placeholder="Rate ($ per unit)">
+          </div>
+          <div class="rate-form-row">
+            <input id="rate-source-url" placeholder="Pricing source URL (optional)">
+            <button type="submit" class="newbtn">Add rate (starts pending)</button>
+          </div>
+          <p id="rate-form-error" class="pin-error hidden"></p>
+        </form>
+      </section>
+
+      <section class="pane rates-table">
+        <h2>Rates <label class="toggle rates-history-toggle"><input type="checkbox" id="rates-show-history"> Show history</label></h2>
+        <div id="rates-table" class="cost-table"></div>
+      </section>
+    </div>
   </div>
 </main>
 

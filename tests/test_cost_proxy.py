@@ -105,3 +105,81 @@ def test_pin_check_accepts_correct_pin(client, keyed, monkeypatch):
     resp = client.get("/cost/pin-check", params={"pin": "4080"}, headers=keyed)
     assert resp.status_code == 200
     assert resp.json() == {"pin_required": True, "correct": True}
+
+
+def _mock_upstream_request(monkeypatch, *, content=b'{"ok":true}', status_code=200, captured=None):
+    # Named response_content, not content: content is also the kwarg
+    # _forward_write passes for the *request* body, and a same-named inner
+    # parameter would shadow this closure's response body with that instead.
+    async def fake_request(self, method, url, content=None, params=None, headers=None, **kwargs):
+        if captured is not None:
+            captured["params"] = params
+        return httpx.Response(status_code, content=response_content, request=httpx.Request(method, url))
+
+    response_content = content
+    monkeypatch.setattr(httpx.AsyncClient, "request", fake_request)
+
+
+def test_price_book_list_is_forwarded(client, keyed, monkeypatch):
+    _mock_upstream_request(monkeypatch, content=b'{"rates":[]}')
+    resp = client.get("/cost/api-write/price-book", headers=keyed)
+    assert resp.status_code == 200
+    assert resp.json() == {"rates": []}
+
+
+def test_price_book_list_forwards_query_params(client, keyed, monkeypatch):
+    # Regression test: _forward_write initially built the upstream request
+    # with no `params=`, so ?include_history=true silently vanished and the
+    # Rates tab's "Show history" toggle looked broken (pending/superseded
+    # rows never appeared) even though the write itself succeeded.
+    captured = {}
+    _mock_upstream_request(monkeypatch, content=b'{"rates":[]}', captured=captured)
+    resp = client.get("/cost/api-write/price-book", headers=keyed,
+                       params={"include_history": "true", "provider": "openai"})
+    assert resp.status_code == 200
+    assert captured["params"] == {"include_history": "true", "provider": "openai"}
+
+
+def test_price_book_create_is_forwarded(client, keyed, monkeypatch):
+    _mock_upstream_request(monkeypatch, content=b'{"id":1,"approval_status":"pending"}')
+    resp = client.post("/cost/api-write/price-book", headers=keyed, json={
+        "provider": "openai", "model": "gpt-x", "billing_unit": "minute", "flat_rate": "0.01",
+    })
+    assert resp.status_code == 200
+    assert resp.json()["approval_status"] == "pending"
+
+
+def test_price_book_approve_is_forwarded(client, keyed, monkeypatch):
+    _mock_upstream_request(monkeypatch, content=b'{"id":1,"approval_status":"approved"}')
+    resp = client.patch("/cost/api-write/price-book/1/approve", headers=keyed)
+    assert resp.status_code == 200
+    assert resp.json()["approval_status"] == "approved"
+
+
+def test_price_book_reject_is_forwarded(client, keyed, monkeypatch):
+    _mock_upstream_request(monkeypatch, content=b'{"id":1,"approval_status":"rejected"}')
+    resp = client.patch("/cost/api-write/price-book/1/reject", headers=keyed, json={})
+    assert resp.status_code == 200
+    assert resp.json()["approval_status"] == "rejected"
+
+
+def test_price_book_deactivate_is_forwarded(client, keyed, monkeypatch):
+    _mock_upstream_request(monkeypatch, content=b'{"id":1,"effective_to":"2026-09-04T00:00:00Z"}')
+    resp = client.post("/cost/api-write/price-book/1/deactivate", headers=keyed)
+    assert resp.status_code == 200
+    assert resp.json()["effective_to"] is not None
+
+
+def test_price_book_create_requires_key(client, monkeypatch):
+    monkeypatch.setattr(config, "API_KEY", "s3cret")
+    resp = client.post("/cost/api-write/price-book", json={})
+    assert resp.status_code == 401
+
+
+def test_price_book_write_unreachable_returns_503(client, keyed, monkeypatch):
+    async def fake_request(self, method, url, content=None, headers=None, **kwargs):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx.AsyncClient, "request", fake_request)
+    resp = client.post("/cost/api-write/price-book", headers=keyed, json={})
+    assert resp.status_code == 503

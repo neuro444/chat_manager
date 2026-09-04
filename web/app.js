@@ -790,3 +790,150 @@ async function openCostDrilldown(callId) {
   }
 }
 $("cost-drilldown-close").onclick = () => $("cost-drilldown").classList.add("hidden");
+
+// ── rates admin ───────────────────────────
+let ratesLoaded = false;
+
+function showCostSubtab(sub) {
+  $("cost-overview").classList.toggle("hidden", sub !== "overview");
+  $("cost-rates").classList.toggle("hidden", sub !== "rates");
+  $("cost-subtab-overview").classList.toggle("active", sub === "overview");
+  $("cost-subtab-rates").classList.toggle("active", sub === "rates");
+  if (sub === "rates" && !ratesLoaded) loadRatesTable();
+}
+$("cost-subtab-overview").onclick = () => showCostSubtab("overview");
+$("cost-subtab-rates").onclick = () => showCostSubtab("rates");
+
+$("rate-billing-unit").onchange = (e) => {
+  const isLlm = e.target.value === "million_tokens";
+  const hasUnit = !!e.target.value;
+  $("rate-fields-llm").classList.toggle("hidden", !(hasUnit && isLlm));
+  $("rate-fields-flat").classList.toggle("hidden", !(hasUnit && !isLlm));
+};
+
+$("rates-show-history").onchange = () => loadRatesTable();
+
+const RATES_COLUMNS = [
+  "Provider", "Model", "Unit", "Rate(s)", "Status", "Effective from", "Effective to", "Actions",
+];
+
+function formatRateValues(r) {
+  if (r.billing_unit === "million_tokens") {
+    const parts = [`in ${r.input_rate ?? "—"}`, `out ${r.output_rate ?? "—"}`];
+    if (r.cached_input_rate) parts.push(`cached ${r.cached_input_rate}`);
+    return parts.join(" / ");
+  }
+  return r.flat_rate ?? "—";
+}
+
+async function loadRatesTable() {
+  ratesLoaded = true;
+  const box = $("rates-table");
+  box.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const includeHistory = $("rates-show-history").checked;
+    const data = await api(`/cost/api-write/price-book?include_history=${includeHistory}`);
+    const rates = data.rates || [];
+    if (!rates.length) { renderEmpty(box, "No rates yet."); return; }
+    box.innerHTML = "";
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    RATES_COLUMNS.forEach((label) => {
+      const th = document.createElement("th");
+      th.textContent = label;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    const tbody = document.createElement("tbody");
+    rates.forEach((r) => {
+      const tr = document.createElement("tr");
+      const cells = [
+        r.provider, r.model, r.billing_unit, formatRateValues(r), r.approval_status,
+        fmtTime(r.effective_from), r.effective_to ? fmtTime(r.effective_to) : "—",
+      ];
+      cells.forEach((text) => {
+        const td = document.createElement("td");
+        td.textContent = String(text);
+        tr.appendChild(td);
+      });
+      const actionsTd = document.createElement("td");
+      if (r.approval_status === "pending") {
+        const approveBtn = document.createElement("button");
+        approveBtn.className = "filter-btn";
+        approveBtn.textContent = "Approve";
+        approveBtn.onclick = () => resolveRate(r.id, "approve");
+        const rejectBtn = document.createElement("button");
+        rejectBtn.className = "filter-btn";
+        rejectBtn.textContent = "Reject";
+        rejectBtn.onclick = () => resolveRate(r.id, "reject");
+        actionsTd.append(approveBtn, rejectBtn);
+      } else if (r.approval_status === "approved" && !r.effective_to) {
+        const deactivateBtn = document.createElement("button");
+        deactivateBtn.className = "filter-btn";
+        deactivateBtn.textContent = "Deactivate";
+        deactivateBtn.onclick = () => resolveRate(r.id, "deactivate");
+        actionsTd.appendChild(deactivateBtn);
+      }
+      tr.appendChild(actionsTd);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    box.appendChild(table);
+  } catch (err) {
+    renderEmpty(box, `Rates unavailable (${err.message}).`);
+  }
+}
+
+async function resolveRate(rateId, action) {
+  const methodPath = {
+    approve: ["PATCH", `/cost/api-write/price-book/${rateId}/approve`],
+    reject: ["PATCH", `/cost/api-write/price-book/${rateId}/reject`],
+    deactivate: ["POST", `/cost/api-write/price-book/${rateId}/deactivate`],
+  }[action];
+  try {
+    await api(methodPath[1], {
+      method: methodPath[0],
+      headers: { "Content-Type": "application/json" },
+      body: action === "reject" ? JSON.stringify({}) : undefined,
+    });
+    loadRatesTable();
+  } catch (err) {
+    alert(`Could not ${action} rate: ${err.message}`);
+  }
+}
+
+$("rate-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const errorEl = $("rate-form-error");
+  errorEl.classList.add("hidden");
+  const billingUnit = $("rate-billing-unit").value;
+  const body = {
+    provider: $("rate-provider").value.trim(),
+    model: $("rate-model").value.trim(),
+    billing_unit: billingUnit,
+    pricing_source_url: $("rate-source-url").value.trim() || null,
+  };
+  if (billingUnit === "million_tokens") {
+    body.input_rate = $("rate-input-rate").value || null;
+    body.cached_input_rate = $("rate-cached-rate").value || null;
+    body.output_rate = $("rate-output-rate").value || null;
+  } else {
+    body.flat_rate = $("rate-flat-rate").value || null;
+  }
+  try {
+    await api("/cost/api-write/price-book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    $("rate-form").reset();
+    $("rate-fields-llm").classList.add("hidden");
+    $("rate-fields-flat").classList.add("hidden");
+    loadRatesTable();
+  } catch (err) {
+    errorEl.textContent = `Could not add rate: ${err.message}`;
+    errorEl.classList.remove("hidden");
+  }
+};
