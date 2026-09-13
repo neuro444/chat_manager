@@ -223,12 +223,72 @@ async function openSession(sid) {
   } else sum.classList.add("hidden");
 }
 
+let customerAudioUrls = [];
 function renderMessages(msgs) {
+  customerAudioUrls.forEach((url) => URL.revokeObjectURL(url));
+  customerAudioUrls = [];
   const box = $("messages");
   box.innerHTML = "";
   if (!msgs.length) { box.innerHTML = '<div class="empty">No messages.</div>'; return; }
-  msgs.forEach((m) => box.appendChild(bubble(m.role, m.content, m.created_at)));
+  msgs.forEach((m) => {
+    const node = bubble(m.role, m.content, m.created_at);
+    if (m.role === "user") addCustomerAudio(node, m.customer_audio, state.session);
+    box.appendChild(node);
+  });
   box.scrollTop = box.scrollHeight;
+}
+
+function addCustomerAudio(node, clip, sid) {
+  const panel = document.createElement("div");
+  panel.className = "customer-audio";
+  const label = document.createElement("span");
+  panel.appendChild(label);
+  node.appendChild(panel);
+  if (!clip?.id) { label.textContent = "Customer audio: not recorded"; return; }
+  if (clip.expires_at * 1000 < Date.now()) { label.textContent = "Customer audio: expired"; return; }
+  label.textContent = `Customer audio · ${Number(clip.duration_seconds).toFixed(1)}s${clip.complete ? "" : " · incomplete"}`;
+  const button = document.createElement("button");
+  button.textContent = "Load audio";
+  panel.appendChild(button);
+  const path = `/sessions/${encodeURIComponent(sid)}/audio/${encodeURIComponent(clip.id)}`;
+  button.onclick = async () => {
+    button.disabled = true;
+    try {
+      const response = await api(path);
+      const blob = await response.blob();
+      if (!node.isConnected || sid !== state.session) return;
+      const url = URL.createObjectURL(blob);
+      customerAudioUrls.push(url);
+      const player = document.createElement("audio");
+      player.controls = true;
+      player.src = url;
+      player.setAttribute("aria-label", "Customer audio for this transcript");
+      const download = document.createElement("a");
+      download.href = url; download.download = `${clip.id}.wav`; download.textContent = "Download WAV";
+      panel.append(player, download);
+      for (const [format, title] of [["mulaw", "Download original audio"], ["json", "Download diagnostics"]]) {
+        const link = document.createElement("button");
+        link.textContent = title;
+        link.onclick = async () => {
+          link.disabled = true;
+          try {
+            const response = await fetch(`${path}?format=${format}`);
+            if (!response.ok) throw new Error("unavailable");
+            const url = URL.createObjectURL(await response.blob());
+            customerAudioUrls.push(url);
+            const anchor = document.createElement("a");
+            anchor.href = url; anchor.download = `${clip.id}.${format}`; anchor.click();
+          } catch (_) { link.textContent = "Unavailable — retry"; }
+          finally { link.disabled = false; }
+        };
+        panel.appendChild(link);
+      }
+      button.remove();
+    } catch (err) {
+      button.textContent = "Audio unavailable — retry";
+      button.disabled = false;
+    }
+  };
 }
 
 function bubble(role, text, ts) {

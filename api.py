@@ -20,7 +20,29 @@ from service import handle_message
 from storage import make_repo
 from menu.loader import menu_items
 
-app = FastAPI(title="Chat Manager — Phone Ordering")
+from contextlib import asynccontextmanager
+import asyncio
+
+
+@asynccontextmanager
+async def lifespan(app):
+    async def expire_audio():
+        import customer_audio
+        while True:
+            try:
+                await asyncio.to_thread(customer_audio.cleanup)
+            except OSError:
+                pass
+            await asyncio.sleep(3600)
+    task = asyncio.create_task(expire_audio())
+    try:
+        yield
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+app = FastAPI(lifespan=lifespan, title="Chat Manager — Phone Ordering")
 
 # Allows the voice_central dashboard (browser JS on a different origin)
 # to call this API directly. telephony calls chat_manager server-to-server
@@ -201,6 +223,7 @@ class ChatIn(BaseModel):
     user_id: str = "default"          # the caller's phone number
     session_id: str | None = None
     message: str
+    customer_audio: dict | None = None
     include_llm_debug: bool = False
     new_session: bool = False
 
@@ -217,7 +240,7 @@ def chat(body: ChatIn):
     return handle_message(get_repo(), get_provider(),
                           _caller(body.user_id), body.session_id, body.message,
                           include_llm_debug=body.include_llm_debug,
-                          new_session=body.new_session)
+                          new_session=body.new_session, customer_audio=body.customer_audio)
 
 
 @app.get("/callers", dependencies=[Depends(require_api_key)])
@@ -239,7 +262,11 @@ def callers():
 @app.delete("/callers", dependencies=[Depends(require_api_key)])
 def delete_caller(user_id: str):
     user_id = _caller(user_id)
-    get_repo().delete_user(user_id)
+    import customer_audio
+    repo = get_repo()
+    for session in repo.list_sessions(user_id, limit=1000000):
+        customer_audio.delete_session(session.session_id)
+    repo.delete_user(user_id)
     return {"deleted": user_id}
 
 
@@ -371,9 +398,34 @@ def crm_customers():
 def messages(session_id: str):
     return [
         {"seq": m.seq, "role": m.role, "content": m.content,
-         "created_at": _iso(m.created_at)}
+         "created_at": _iso(m.created_at),
+         "customer_audio": (m.metadata or {}).get("customer_audio")}
         for m in get_repo().all_messages(session_id)
     ]
+
+
+@app.get("/sessions/{session_id}/audio/{recording_id}", dependencies=[Depends(require_api_key)])
+def customer_audio_download(session_id: str, recording_id: str, format: str = "wav"):
+    import customer_audio
+    repo = get_repo()
+    if not repo.get_session(session_id) or not any(
+        ((m.metadata or {}).get("customer_audio") or {}).get("id") == recording_id
+        for m in repo.all_messages(session_id)
+    ):
+        raise HTTPException(404, "Audio not available for this call")
+    try:
+        meta, raw = customer_audio.read(session_id, recording_id)
+    except (OSError, ValueError):
+        raise HTTPException(404, "Audio expired or unavailable")
+    headers = {"Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="{recording_id}.{format}"'}
+    if format == "json":
+        import json
+        return Response(json.dumps(meta), media_type="application/json", headers=headers)
+    if format == "mulaw":
+        return Response(raw, media_type="application/octet-stream", headers=headers)
+    if format != "wav":
+        raise HTTPException(400, "Use wav, mulaw, or json")
+    return Response(customer_audio.wav_bytes(raw), media_type="audio/wav", headers=headers)
 
 
 @app.get("/sessions/{session_id}/debug", dependencies=[Depends(require_api_key)])
@@ -386,7 +438,9 @@ def session_debug(session_id: str):
 
 @app.delete("/sessions/{session_id}", dependencies=[Depends(require_api_key)])
 def delete(session_id: str):
+    import customer_audio
     get_repo().delete_session(session_id)
+    customer_audio.delete_session(session_id)
     return {"deleted": session_id}
 
 

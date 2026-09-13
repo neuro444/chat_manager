@@ -75,14 +75,17 @@ def resolve_session(
     return repo.create_session(user_id).session_id
 
 
-def _start_turn(repo, user_id, session_id, user_message, new_session=False):
+def _start_turn(repo, user_id, session_id, user_message, new_session=False, customer_audio=None):
     """Shared prologue: resolve session, persist the user turn, build context."""
     repo.ensure_user(user_id)
     session_id = resolve_session(repo, user_id, session_id, new_session=new_session)
     is_first_turn = repo.message_count(session_id) == 0
     # persist the user turn BEFORE calling the LLM, so a failure mid-call never
     # loses what the user typed
-    repo.append_message(session_id, "user", user_message)
+    from customer_audio import save
+    audio = save(customer_audio, session_id, user_message)
+    repo.append_message(session_id, "user", user_message,
+                        metadata={"customer_audio": audio} if audio else None)
     messages = build_context(repo, user_id, session_id, user_message)
     if config.DEBUG_CONTEXT:
         from context.debug import print_context_report
@@ -262,11 +265,11 @@ def _build_ready_order(provider, requested: bool, customer_name=None):
 
 def handle_message(
     repo, provider, user_id, session_id, user_message, include_llm_debug=False,
-    new_session=False,
+    new_session=False, customer_audio=None,
 ):
     """Run one full turn and return {"answer", "session_id"}."""
     session_id, is_first, messages = _start_turn(
-        repo, user_id, session_id, user_message, new_session=new_session
+        repo, user_id, session_id, user_message, new_session=new_session, customer_audio=customer_audio
     )
     input_tokens = tokens.count_messages(messages)
     print(f"[llm_call_start] session_id={session_id} "

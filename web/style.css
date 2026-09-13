@@ -183,3 +183,7 @@ body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,s
 .rates-history-toggle{margin-left:12px;font-size:12px;font-weight:400;text-transform:none;
                        letter-spacing:0;display:inline-flex;align-items:center;gap:4px}
 .rates-table td button{margin-right:6px}
+
+.customer-audio { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:14px; font-size:13px; }
+.customer-audio audio { width: min(100%, 340px); }
+.customer-audio a { color:inherit; }
