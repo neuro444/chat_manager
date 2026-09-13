@@ -13,8 +13,10 @@ const source = fs.readFileSync(require('node:path').join(__dirname, '../web/app.
 const start = source.indexOf('function addCustomerAudio(');
 const end = source.indexOf('function bubble(', start);
 let requestPath;
+const pendingLoads = [];
 const context = {
   document: { createElement: (tag) => new Element(tag) }, state: {session:'call-one'},
+  queueMicrotask: (fn) => pendingLoads.push(fn),
   customerAudioUrls: [], URL: { createObjectURL: () => 'blob:test' },
   api: async (path) => { requestPath = path; return {blob:async () => ({})}; },
 };
@@ -25,7 +27,9 @@ vm.runInContext(source.slice(start, end), context);
   context.addCustomerAudio(node, {id:'clip-one',duration_seconds:1.2,complete:true,expires_at:Date.now()/1000+60}, 'call-one');
   const panel = node.children[0];
   const button = panel.children[1];
-  await button.onclick();
+  assert.equal(pendingLoads.length, 1);
+  pendingLoads.shift()();
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(requestPath, '/sessions/call-one/audio/clip-one');
   const player = panel.children.find(x => x.tag === 'audio');
   assert.equal(player.controls, true);

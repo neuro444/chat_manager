@@ -248,7 +248,7 @@ function addCustomerAudio(node, clip, sid) {
   if (clip.expires_at * 1000 < Date.now()) { label.textContent = "Customer audio: expired"; return; }
   label.textContent = `Customer audio · ${Number(clip.duration_seconds).toFixed(1)}s${clip.complete ? "" : " · incomplete"}`;
   const button = document.createElement("button");
-  button.textContent = "Load audio";
+  button.textContent = "Loading audio…";
   panel.appendChild(button);
   const path = `/sessions/${encodeURIComponent(sid)}/audio/${encodeURIComponent(clip.id)}`;
   button.onclick = async () => {
@@ -289,6 +289,9 @@ function addCustomerAudio(node, clip, sid) {
       button.disabled = false;
     }
   };
+  queueMicrotask(() => {
+    if (node.isConnected && sid === state.session) button.onclick();
+  });
 }
 
 function bubble(role, text, ts) {

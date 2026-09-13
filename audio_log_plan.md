@@ -18,7 +18,7 @@ recording API and does not enable full-call recording.
    message's metadata before invoking the LLM. SQLite, Mongo and memory storage
    already support message metadata. No database schema migration is required.
 4. `/sessions/{id}/messages` returns the audio reference. The same user bubble
-   offers Load audio, a native player with seek/pause, Download WAV, Download
+   automatically loads a native player with seek/pause, Download WAV, Download
    original audio, and Download diagnostics. Fetching audio uses the existing
    same-origin access path. Switching calls releases loaded Blob URLs.
 5. `/sessions/{id}/audio/{recording_id}` checks API authorization, session
@@ -32,9 +32,10 @@ hints do not imply every STT provider supports those hints.
 
 ## Debug controls and storage
 
-`DEBUG_CUSTOMER_AUDIO=false` by default. Enable it on the gateway and set
-`DEBUG_AUDIO_CALLERS` to comma-separated E.164 test caller numbers. The supplied
-installer prompts for those numbers and enables only those callers. It preserves
+`DEBUG_CUSTOMER_AUDIO=false` is the undeployed code default. The supplied
+installer sets it to true and clears `DEBUG_AUDIO_CALLERS`, enabling all caller
+numbers automatically as requested. An optional `--callers` restriction remains
+available, but there is no caller-number prompt. It preserves
 carrier, recognizer and hints settings. Both carriers remain selectable; no
 carrier or STT fallback has been added.
 
