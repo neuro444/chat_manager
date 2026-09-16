@@ -90,6 +90,39 @@ PORT = _int("PORT", 8000)
 API_KEY = os.getenv("API_KEY", "")
 API_KEY_HEADER = os.getenv("API_KEY_HEADER", "X-API-Key")
 
+# ── External voice-agent provider backends ────────
+# Standalone voice-agent backends (e.g. plivo_agent_repo) that own their own
+# database and expose the same read-only dashboard contract
+# (GET /orders/recent, /handoffs/recent) as this app. Each entry here is
+# merged into this app's own /orders/recent and /api/approvals results --
+# additive only, no shared database, no runtime coupling into call handling.
+# Add one VOICE_AGENT_PROVIDERS entry per provider; this app never hardcodes
+# to Plivo specifically, since more providers (e.g. ElevenAgents) are planned.
+# Format: "name1|url1|key1,name2|url2|key2"
+def _parse_voice_agent_providers(raw: str) -> list[dict]:
+    providers = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.split("|")
+        if len(parts) != 3:
+            continue
+        name, url, key = (p.strip() for p in parts)
+        if name and url:
+            providers.append({"name": name, "url": url.rstrip("/"), "api_key": key})
+    return providers
+
+
+_voice_agent_providers_raw = os.getenv("VOICE_AGENT_PROVIDERS", "")
+if not _voice_agent_providers_raw and os.getenv("PLIVO_AGENT_API_URL"):
+    # Back-compat: a bare PLIVO_AGENT_API_URL (matching plivo_agent_repo's own
+    # env var naming) still works without also setting VOICE_AGENT_PROVIDERS.
+    _voice_agent_providers_raw = (
+        f"plivo|{os.environ['PLIVO_AGENT_API_URL']}|{os.getenv('PLIVO_AGENT_API_KEY', '')}"
+    )
+VOICE_AGENT_PROVIDERS = _parse_voice_agent_providers(_voice_agent_providers_raw)
+
 # ── Cost monitoring ───────────────────
 # Where the internal cost-api service (observe_repo) is reachable. The proxy
 # only forwards GET requests to an allowlisted set of read-only paths.

@@ -9,6 +9,7 @@ import re
 from collections import defaultdict
 from pathlib import Path
 
+import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -184,6 +185,28 @@ def _session_facts(repo, session) -> dict:
     return {"name": name, "completed_order": completed, "handoff": handoff}
 
 
+def _fetch_voice_agent_provider(provider: dict, route: str, limit: int) -> dict:
+    """GET one read-only route off an external voice-agent provider backend
+    (see config.VOICE_AGENT_PROVIDERS). Additive only: any failure (provider
+    down, misconfigured, slow) must not break this app's own dashboard data,
+    so errors are swallowed here and logged, not raised."""
+    try:
+        resp = httpx.get(
+            f"{provider['url']}/{route}",
+            params={"limit": limit},
+            headers={"X-API-Key": provider["api_key"]} if provider["api_key"] else {},
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).warning(
+            "voice-agent provider %r unreachable for /%s", provider["name"], route, exc_info=True
+        )
+        return {}
+
+
 def _all_completed_orders(repo, limit: int = 200) -> list[dict]:
     orders = []
     for caller in repo.list_callers(limit=200):
@@ -191,6 +214,9 @@ def _all_completed_orders(repo, limit: int = 200) -> list[dict]:
             completed = _session_facts(repo, session)["completed_order"]
             if completed:
                 orders.append(completed)
+    for provider in config.VOICE_AGENT_PROVIDERS:
+        data = _fetch_voice_agent_provider(provider, "orders/recent", limit)
+        orders.extend(data.get("orders") or [])
     orders.sort(key=lambda item: item.get("emitted_at") or "", reverse=True)
     return orders[:limit]
 
@@ -199,7 +225,9 @@ def _all_approvals(repo, limit: int = 200) -> list[dict]:
     """Manager handoffs awaiting a decision, newest first.
 
     A handoff is pending until the same session produces a completed order --
-    that is the only completion signal chat_manager persists today.
+    that is the only completion signal chat_manager persists today. External
+    voice-agent providers' handoffs (see config.VOICE_AGENT_PROVIDERS) have no
+    resolution signal available here, so they're always shown as pending.
     """
     approvals = []
     for caller in repo.list_callers(limit=200):
@@ -210,6 +238,19 @@ def _all_approvals(repo, limit: int = 200) -> list[dict]:
                 continue
             handoff["status"] = "resolved" if facts["completed_order"] else "pending"
             approvals.append(handoff)
+    for provider in config.VOICE_AGENT_PROVIDERS:
+        data = _fetch_voice_agent_provider(provider, "handoffs/recent", limit)
+        for h in data.get("handoffs") or []:
+            approvals.append({
+                "session_id": h.get("call_uuid"),
+                "user_id": h.get("user_id"),
+                "requested_at": h.get("emitted_at"),
+                "order_type": h.get("order_type"),
+                "name": h.get("name"),
+                "summary": None,
+                "verbatim_user_chat": None,
+                "status": "pending",
+            })
     approvals.sort(key=lambda item: item.get("requested_at") or "", reverse=True)
     return approvals[:limit]
 
@@ -505,6 +546,17 @@ def tts(body: TTSIn):
 
 
 # ── dashboard ────────────────────────────
+@app.get("/runtime/stt", dependencies=[Depends(require_api_key)])
+def phone_stt_status():
+    from stt_status import read_status
+    return read_status()
+
+
+@app.get("/stt-status.js")
+def phone_stt_script():
+    return FileResponse(WEB / "stt-status.js", media_type="application/javascript")
+
+
 @app.get("/")
 def dashboard():
     return FileResponse(WEB / "index.html")

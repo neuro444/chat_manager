@@ -181,3 +181,60 @@ def test_crm_is_aggregated_from_completed_sessions(client):
             "items": [{"name": "Chilli Paneer", "qty": 1}],
         }],
     }]
+
+
+def test_recent_orders_merges_in_external_voice_agent_provider(client, monkeypatch):
+    """A configured external provider's /orders/recent is merged into this
+    app's own results -- proves the additive, non-Plivo-specific provider
+    merge in api._all_completed_orders actually reaches the response."""
+    import api
+    import config
+
+    monkeypatch.setattr(config, "VOICE_AGENT_PROVIDERS", [
+        {"name": "plivo", "url": "http://fake-plivo.invalid", "api_key": "k"},
+    ])
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"orders": [{
+                "event": "pickup_order",
+                "emitted_at": "2026-09-16T12:00:00+00:00",
+                "call_uuid": "call-plivo-1",
+                "user_id": "+15551112222",
+                "session_id": None,
+                "order_type": "pickup",
+                "name": "Krishna",
+                "channel": "plivo",
+                "order": {"total": "64.96"},
+            }]}
+
+    monkeypatch.setattr(api.httpx, "get", lambda *a, **k: FakeResponse())
+
+    orders = client.get("/orders/recent").json()["orders"]
+    assert len(orders) == 1
+    assert orders[0]["call_uuid"] == "call-plivo-1"
+    assert orders[0]["channel"] == "plivo"
+
+
+def test_recent_orders_survives_unreachable_voice_agent_provider(client, monkeypatch):
+    """A down/misconfigured provider must not break this app's own dashboard
+    data -- additive only, per plan (see config.VOICE_AGENT_PROVIDERS)."""
+    import api
+    import config
+
+    monkeypatch.setattr(config, "VOICE_AGENT_PROVIDERS", [
+        {"name": "plivo", "url": "http://fake-plivo.invalid", "api_key": "k"},
+    ])
+
+    def _raise(*a, **k):
+        raise ConnectionError("boom")
+
+    monkeypatch.setattr(api.httpx, "get", _raise)
+
+    _completed_order(client, name="Anita")
+    orders = client.get("/orders/recent").json()["orders"]
+    assert len(orders) == 1
+    assert orders[0]["channel"] == "chat"
