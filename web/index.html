@@ -90,6 +90,11 @@
     </nav>
 
     <div id="cost-overview">
+    <nav class="tabs cost-subtabs cost-agent-tabs" id="cost-agent-tabs">
+      <button class="tab active" data-provider="elevenlabs">ElevenLabs</button>
+      <button class="tab" data-provider="plivo">Plivo</button>
+    </nav>
+
     <section class="pane cost-summary">
       <h2>Today</h2>
       <div id="cost-today" class="cost-cards"></div>
@@ -113,7 +118,7 @@
       <select id="cost-provider-filter" class="cost-provider-select">
         <option value="">All providers</option>
         <option value="openai">OpenAI</option>
-        <option value="elevenlabs">ElevenLabs</option>
+        <option value="elevenlabs" selected>ElevenLabs</option>
         <option value="plivo">Plivo</option>
       </select>
     </div>
@@ -190,5 +195,6 @@
 </main>
 
 <script src="/app.js"></script>
+<script src="/stt-status.js" defer></script>
 </body>
 </html>

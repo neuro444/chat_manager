@@ -51,6 +51,15 @@ const fmtTime = (iso) => {
   return isNaN(d) ? "" : d.toLocaleString([], {
     month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 };
+// Cost tab calls/rates rows can span year boundaries (e.g. Dec 31 vs Jan 1) --
+// fmtTime() above omits the year, which reads as ambiguous there even though
+// it's fine for same-year chat/session timestamps elsewhere in this file.
+const fmtTimeWithYear = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(d) ? "" : d.toLocaleString([], {
+    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+};
 const icon = (name) => name === "trash"
   ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 15H6L5 6m4 4v7m6-7v7"/></svg>'
   : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>';
@@ -536,7 +545,7 @@ const costState = {
   range: "today",       // today | 7d | 30d | month | year | custom
   startDate: null,       // yyyy-mm-dd, set for custom or derived from preset
   endDate: null,
-  provider: "",
+  provider: "elevenlabs",
   groupBy: "day",        // day | month | year, for the breakdown table
   calls: [],
   sortKey: "started_at",
@@ -598,8 +607,24 @@ $("cost-custom-apply").onclick = () => {
 
 $("cost-provider-filter").onchange = (e) => {
   costState.provider = e.target.value;
+  syncCostAgentTabs();
   refreshCostData();
 };
+
+function syncCostAgentTabs() {
+  document.querySelectorAll("#cost-agent-tabs .tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.provider === costState.provider);
+  });
+}
+
+document.querySelectorAll("#cost-agent-tabs .tab").forEach((btn) => {
+  btn.onclick = () => {
+    costState.provider = btn.dataset.provider;
+    $("cost-provider-filter").value = costState.provider;
+    syncCostAgentTabs();
+    refreshCostData();
+  };
+});
 
 document.querySelectorAll("#cost-group-toggle .filter-btn").forEach((btn) => {
   btn.onclick = () => {
@@ -730,7 +755,7 @@ function renderCostCallsTable() {
     const tr = document.createElement("tr");
     tr.className = "cost-row";
     const cells = [
-      fmtTime(c.started_at),
+      fmtTimeWithYear(c.started_at),
       c.status,
       (c.providers || []).join(", "),
       String(c.total_input_tokens ?? 0),
