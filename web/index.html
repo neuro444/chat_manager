@@ -90,9 +90,9 @@
     </nav>
 
     <div id="cost-overview">
-    <nav class="tabs cost-subtabs cost-agent-tabs" id="cost-agent-tabs">
-      <button class="tab active" data-provider="elevenlabs">ElevenLabs</button>
-      <button class="tab" data-provider="plivo">Plivo</button>
+    <nav class="cost-agent-tabs" id="cost-agent-tabs">
+      <button class="cost-agent-tab active" data-provider="elevenlabs">ElevenLabs</button>
+      <button class="cost-agent-tab" data-provider="plivo">Plivo</button>
     </nav>
 
     <section class="pane cost-summary">
@@ -115,7 +115,7 @@
         <input type="date" id="cost-range-end">
         <button id="cost-custom-apply" class="newbtn">Apply</button>
       </div>
-      <select id="cost-provider-filter" class="cost-provider-select">
+      <select id="cost-provider-filter" class="cost-provider-select hidden">
         <option value="">All providers</option>
         <option value="openai">OpenAI</option>
         <option value="elevenlabs" selected>ElevenLabs</option>

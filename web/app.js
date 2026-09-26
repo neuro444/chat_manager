@@ -612,12 +612,12 @@ $("cost-provider-filter").onchange = (e) => {
 };
 
 function syncCostAgentTabs() {
-  document.querySelectorAll("#cost-agent-tabs .tab").forEach((btn) => {
+  document.querySelectorAll("#cost-agent-tabs .cost-agent-tab").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.provider === costState.provider);
   });
 }
 
-document.querySelectorAll("#cost-agent-tabs .tab").forEach((btn) => {
+document.querySelectorAll("#cost-agent-tabs .cost-agent-tab").forEach((btn) => {
   btn.onclick = () => {
     costState.provider = btn.dataset.provider;
     $("cost-provider-filter").value = costState.provider;
