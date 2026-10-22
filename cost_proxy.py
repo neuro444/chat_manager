@@ -61,3 +61,53 @@ async def cost_proxy(path: str, request: Request) -> Response:
             status_code=503,
             media_type="application/json",
         )
+
+
+async def _forward_write(method: str, path: str, request: Request) -> Response:
+    """Same pattern as cost_proxy() but for writes -- a fixed, small set of
+    routes below rather than an open allowlist, since these change what
+    future calls get billed as (price_book), not just read data."""
+    url = f"{config.COST_API_URL.rstrip('/')}/{path}"
+    body = await request.body()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            upstream = await client.request(
+                method, url, content=body, params=dict(request.query_params),
+                headers={"content-type": request.headers.get("content-type", "application/json")},
+            )
+        return Response(
+            content=upstream.content,
+            status_code=upstream.status_code,
+            media_type=upstream.headers.get("content-type", "application/json"),
+        )
+    except httpx.RequestError:
+        return Response(
+            content='{"error":"cost monitoring unavailable"}',
+            status_code=503,
+            media_type="application/json",
+        )
+
+
+@router.get("/api-write/price-book")
+async def price_book_list(request: Request) -> Response:
+    return await _forward_write("GET", "internal/price-book", request)
+
+
+@router.post("/api-write/price-book")
+async def price_book_create(request: Request) -> Response:
+    return await _forward_write("POST", "internal/price-book", request)
+
+
+@router.patch("/api-write/price-book/{rate_id}/approve")
+async def price_book_approve(rate_id: int, request: Request) -> Response:
+    return await _forward_write("PATCH", f"internal/price-book/{rate_id}/approve", request)
+
+
+@router.patch("/api-write/price-book/{rate_id}/reject")
+async def price_book_reject(rate_id: int, request: Request) -> Response:
+    return await _forward_write("PATCH", f"internal/price-book/{rate_id}/reject", request)
+
+
+@router.post("/api-write/price-book/{rate_id}/deactivate")
+async def price_book_deactivate(rate_id: int, request: Request) -> Response:
+    return await _forward_write("POST", f"internal/price-book/{rate_id}/deactivate", request)
