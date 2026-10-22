@@ -1,4 +1,4 @@
-// Staff dashboard. Callers are phone numbers; there is no login.
+﻿// Staff dashboard. Callers are phone numbers; there is no login.
 const $ = (id) => document.getElementById(id);
 const state = {
   caller: null, session: null, sessions: [], forceNewSession: false,
@@ -603,6 +603,8 @@ const CALLS_COLUMNS = [
   { key: "started_at", label: "Started" },
   { key: "status", label: "Status" },
   { key: "providers", label: "Providers" },
+  { key: "total_duration_s", label: "Duration (s)" },
+  { key: "billed_minutes", label: "Billed Mins" },
   { key: "total_input_tokens", label: "Input tokens" },
   { key: "total_output_tokens", label: "Output tokens" },
   { key: "total_cost_usd", label: "Cost" },
@@ -673,6 +675,8 @@ function renderCostCallsTable() {
       fmtTime(c.started_at),
       c.status,
       (c.providers || []).join(", "),
+      c.total_duration_s != null ? String(c.total_duration_s) : "—",
+      c.billed_minutes != null ? Number(c.billed_minutes).toFixed(1) + "m" : "—",
       String(c.total_input_tokens ?? 0),
       String(c.total_output_tokens ?? 0),
       fmtUsd(c.total_cost_usd),
@@ -695,12 +699,15 @@ function renderCostSummary(summary) {
   const rows = [
     ["Total cost", fmtUsd(summary.total_cost_usd)],
     ["Calls", String(summary.call_count)],
+    ["Total billed mins", summary.total_billed_minutes != null ? Number(summary.total_billed_minutes).toFixed(1) + "m" : "—"],
     ["Avg cost / call", fmtUsd(summary.avg_cost_per_call_usd)],
     ["OpenAI", fmtUsd(summary.openai_cost_usd)],
     ["ElevenLabs", fmtUsd(summary.elevenlabs_cost_usd)],
     ["Plivo", fmtUsd(summary.plivo_cost_usd)],
     ["Fixed (server)", fmtUsd(summary.fixed_cost_usd)],
+    ["Fixed (EL Plan)", fmtUsd(summary.fixed_elevenlabs_plan_usd)],
   ];
+
   rows.forEach(([label, value]) => {
     const row = document.createElement("div");
     row.className = "cost-summary-row";
@@ -716,9 +723,15 @@ function renderCostSummary(summary) {
 }
 
 const BREAKDOWN_COLUMNS = [
-  ["period", "Date"], ["call_count", "Calls"], ["openai_cost_usd", "OpenAI"],
-  ["elevenlabs_cost_usd", "ElevenLabs"], ["plivo_cost_usd", "Plivo"],
-  ["fixed_cost_usd", "Fixed"], ["total_cost_usd", "Total"],
+  ["period", "Date"],
+  ["call_count", "Calls"],
+  ["billed_minutes", "Billed Mins"],
+  ["openai_cost_usd", "OpenAI"],
+  ["elevenlabs_cost_usd", "ElevenLabs"],
+  ["plivo_cost_usd", "Plivo"],
+  ["fixed_cost_usd", "Fixed (Server)"],
+  ["fixed_elevenlabs_plan_usd", "Fixed (EL Plan)"],
+  ["total_cost_usd", "Total"],
 ];
 
 async function loadCostBreakdownAndSummary() {
@@ -759,6 +772,7 @@ async function loadCostBreakdownAndSummary() {
       const td = document.createElement("td");
       if (key === "period") td.textContent = p.period;
       else if (key === "call_count") td.textContent = String(p.call_count);
+      else if (key === "billed_minutes") td.textContent = p.billed_minutes != null ? Number(p.billed_minutes).toFixed(1) + "m" : "—";
       else td.textContent = fmtUsd(p[key]);
       tr.appendChild(td);
     });
