@@ -6,14 +6,14 @@ correct structured arguments.
 import sys, pathlib, os, tempfile, json
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-import config
+import chat_manager.config as config
 config.DEBUG_CONTEXT = False          # keep the output readable
 
-import orders.tools as tools
-from orders.calculator import price_order
-from providers.openai_provider import OpenAIProvider
-from service import handle_message
-from storage.sqlite_store import SQLiteStore
+import chat_manager.orders.tools as tools
+from chat_manager.orders.calculator import price_order
+from chat_manager.providers.openai_provider import OpenAIProvider
+from chat_manager.service import handle_message
+from chat_manager.storage.sqlite_store import SQLiteStore
 
 CALLS = []
 _orig_run = tools.run_tool

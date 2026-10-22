@@ -1,9 +1,9 @@
 """Layer 23 — manager handoffs surfaced for the dashboard's approval column."""
 import json
 
-from api import _all_approvals, _message_result
-from providers.fake_provider import FakeProvider
-from service import handle_message
+from chat_manager.api import _all_approvals, _message_result
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import handle_message
 
 
 def _raw(answer, **flags):

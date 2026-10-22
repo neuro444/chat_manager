@@ -8,11 +8,11 @@
 import argparse
 import sys
 
-import config
-from providers import make_provider
-from providers.fake_provider import FakeProvider
-from service import build_context, handle_message, stream_message
-from storage import make_repo
+import chat_manager.config as config
+from chat_manager.providers import make_provider
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import build_context, handle_message, stream_message
+from chat_manager.storage import make_repo
 
 HELP = """
   <text>            send a message

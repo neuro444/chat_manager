@@ -5,9 +5,9 @@ that makes a stateless LLM behave like it remembers.
 """
 import pytest
 
-from providers.fake_provider import FakeProvider
-from service import handle_message
-from storage.memory_store import MemoryStore
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import handle_message
+from chat_manager.storage.memory_store import MemoryStore
 
 
 @pytest.fixture
@@ -62,7 +62,7 @@ def test_seq_is_monotonic(repo):
 
 def test_history_window_is_capped(repo):
     """Old turns must drop out of context, or cost grows without bound."""
-    import config
+    import chat_manager.config as config
     provider = FakeProvider()
     out = handle_message(repo, provider, "u1", None, "turn-0")
     sid = out["session_id"]

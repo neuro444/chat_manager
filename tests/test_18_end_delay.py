@@ -4,9 +4,9 @@ The flag says the call is over; the delay says how long to wait so TTS can
 finish speaking. No timer here — telephony owns the waiting.
 """
 import json
-import config
-from providers.fake_provider import FakeProvider
-from service import handle_message
+import chat_manager.config as config
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import handle_message
 
 END = json.dumps({
     "answer": "Done. CakeWorld Alpharetta.",
@@ -34,9 +34,9 @@ def test_open_call_has_no_delay(repo):
 
 
 def test_api_returns_the_flag_and_delay(tmp_path):
-    import api
+    import chat_manager.api as api
     from fastapi.testclient import TestClient
-    from storage.sqlite_store import SQLiteStore
+    from chat_manager.storage.sqlite_store import SQLiteStore
 
     repo = SQLiteStore(str(tmp_path / "d.db")); repo.init_db()
     api._repo, api._provider = repo, FakeProvider(END)

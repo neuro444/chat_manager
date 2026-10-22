@@ -18,7 +18,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO_ROOT)
 
 # We import the purge function, not __main__, so no side-effects on import.
-import scripts.purge_old_sessions as purge_module  # noqa: E402
+import chat_manager.scripts.purge_old_sessions as purge_module  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

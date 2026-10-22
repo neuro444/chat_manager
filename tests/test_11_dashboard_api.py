@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(tmp_path):
-    import api
-    from providers.fake_provider import FakeProvider
-    from storage.sqlite_store import SQLiteStore
+    import chat_manager.api as api
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.storage.sqlite_store import SQLiteStore
 
     repo = SQLiteStore(str(tmp_path / "dash.db"))
     repo.init_db()
@@ -93,7 +93,7 @@ def test_search_handles_plus_prefixed_numbers(client):
 
 
 def _completed_order(client, phone="+915555555555", name="Anita", user_name=None):
-    import api
+    import chat_manager.api as api
 
     repo = api.get_repo()
     repo.ensure_user(phone)

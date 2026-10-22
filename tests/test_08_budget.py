@@ -1,6 +1,6 @@
 """Layer 8 — token budget: oversized input must be trimmed, invariants held."""
-import config
-from context.assembler import assemble
+import chat_manager.config as config
+from chat_manager.context.assembler import assemble
 
 
 def _tokens(msgs):
@@ -55,7 +55,7 @@ def test_each_layer_respects_its_weight():
 
 
 def test_trim_cuts_on_boundary_not_mid_sentence():
-    from context.assembler import _trim
+    from chat_manager.context.assembler import _trim
     text = "First sentence here. Second sentence here. Third sentence here."
     out = _trim(text, 45)
     assert out.endswith(". ") or out.endswith(".") or len(out) <= 45

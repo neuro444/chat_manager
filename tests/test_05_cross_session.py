@@ -1,9 +1,9 @@
 """Layer 5 — cross-session memory: recall facts from the user's OTHER sessions."""
 import pytest
-import config
-from context.memory import build_memory_context
-from providers.fake_provider import FakeProvider
-from service import build_context, handle_message
+import chat_manager.config as config
+from chat_manager.context.memory import build_memory_context
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import build_context, handle_message
 
 
 @pytest.fixture(params=["memory", "sqlite"])
@@ -40,7 +40,7 @@ def test_current_session_excluded_from_memory(store):
 
 
 def test_memory_survives_restart(tmp_path):
-    from storage.sqlite_store import SQLiteStore
+    from chat_manager.storage.sqlite_store import SQLiteStore
     db = str(tmp_path / "mem.db")
     r1 = SQLiteStore(db); r1.init_db()
     handle_message(r1, FakeProvider(), "u1", None, "my favourite language is Haskell")
@@ -57,7 +57,7 @@ def test_memory_survives_restart(tmp_path):
 def test_plural_singular_match(store):
     """Callers say "two samosas"; later they ask about "samosa". FTS5 does no
     stemming, so prefix matching is what bridges the two."""
-    from providers.fake_provider import FakeProvider
+    from chat_manager.providers.fake_provider import FakeProvider
     handle_message(store, FakeProvider(), "+919", None,
                    "I'll take two samosas and one gobi manchurian")
     new_sid = store.create_session("+919").session_id
@@ -68,8 +68,8 @@ def test_plural_singular_match(store):
 def test_past_order_recalled_from_vague_followup(store):
     """"What did I get last time?" carries no menu words — entity carry-over and
     retrieval must still surface the previous order."""
-    from providers.fake_provider import FakeProvider
-    from service import build_context
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import build_context
     handle_message(store, FakeProvider(), "+9110", None,
                    "I'll take two samosas and one gobi manchurian")
     new_sid = store.create_session("+9110").session_id

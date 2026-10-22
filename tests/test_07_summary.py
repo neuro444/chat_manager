@@ -1,9 +1,9 @@
 """Layer 7 — rolling summary: long conversations compact without losing facts."""
 import pytest
-import config
-from context.summary import maybe_roll_summary, should_roll
-from providers.fake_provider import FakeProvider
-from service import build_context, handle_message
+import chat_manager.config as config
+from chat_manager.context.summary import maybe_roll_summary, should_roll
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import build_context, handle_message
 
 
 @pytest.fixture

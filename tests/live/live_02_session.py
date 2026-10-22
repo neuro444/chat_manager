@@ -2,9 +2,9 @@
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from providers.openai_provider import OpenAIProvider
-from service import handle_message
-from storage.memory_store import MemoryStore
+from chat_manager.providers.openai_provider import OpenAIProvider
+from chat_manager.service import handle_message
+from chat_manager.storage.memory_store import MemoryStore
 
 
 def main():

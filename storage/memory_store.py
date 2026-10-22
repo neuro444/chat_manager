@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from models import Message, Session, User
+from chat_manager.models import Message, Session, User
 
 _STOPWORDS = {
     "what", "when", "where", "who", "why", "how", "the", "a", "an", "is",

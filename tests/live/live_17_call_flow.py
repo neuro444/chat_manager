@@ -1,11 +1,11 @@
 """LIVE — ambiguity handled once, delivery redirect, pickup sign-off, end flag."""
 import sys, pathlib, os, tempfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
-import config; config.DEBUG_CONTEXT = False
+import chat_manager.config as config; config.DEBUG_CONTEXT = False
 
-from providers.openai_provider import OpenAIProvider
-from service import handle_message
-from storage.sqlite_store import SQLiteStore
+from chat_manager.providers.openai_provider import OpenAIProvider
+from chat_manager.service import handle_message
+from chat_manager.storage.sqlite_store import SQLiteStore
 
 
 def call(repo, p, phone, turns):

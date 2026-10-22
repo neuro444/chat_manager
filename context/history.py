@@ -1,5 +1,5 @@
 """Recent-turn window — layer 3 of the context stack."""
-from models import Message
+from chat_manager.models import Message
 
 
 def get_history(repo, session_id: str, limit: int, exclude_last: bool = True) -> list[dict]:

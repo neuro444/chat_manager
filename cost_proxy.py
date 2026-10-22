@@ -6,8 +6,8 @@ import hmac
 import httpx
 from fastapi import APIRouter, Depends, Request, Response
 
-import config
-from api import require_dashboard_key
+import chat_manager.config as config
+from chat_manager.api import require_dashboard_key
 
 router = APIRouter(prefix="/cost", dependencies=[Depends(require_dashboard_key)])
 

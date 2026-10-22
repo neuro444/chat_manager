@@ -1,5 +1,5 @@
 """Dated recent-call context scoped to the same caller phone number."""
-import config
+import chat_manager.config as config
 
 
 def _session_facts(session, messages) -> list[str]:

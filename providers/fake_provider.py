@@ -8,7 +8,7 @@ from typing import Iterator
 
 from pydantic import ValidationError
 
-from context.response_model import CallResponse
+from chat_manager.context.response_model import CallResponse
 
 
 def _as_validated(reply: str):

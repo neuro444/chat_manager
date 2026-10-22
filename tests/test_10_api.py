@@ -5,9 +5,9 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    import api
-    from providers.fake_provider import FakeProvider
-    from storage.sqlite_store import SQLiteStore
+    import chat_manager.api as api
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.storage.sqlite_store import SQLiteStore
 
     repo = SQLiteStore(str(tmp_path / "api.db"))
     repo.init_db()

@@ -5,8 +5,8 @@ carry no content and are expected to print in production.
 """
 import importlib
 
-import config
-import service
+import chat_manager.config as config
+import chat_manager.service as service
 
 
 def _reload(monkeypatch, value):

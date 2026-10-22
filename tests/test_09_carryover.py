@@ -1,8 +1,8 @@
 """Layer 9 — entity carry-over: short follow-ups resolve to the prior subject."""
 import pytest
-from context.state import extract_entities, resolve_active_entities
-from providers.fake_provider import FakeProvider
-from service import handle_message
+from chat_manager.context.state import extract_entities, resolve_active_entities
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import handle_message
 
 
 @pytest.mark.parametrize("text,expected", [

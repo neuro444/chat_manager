@@ -5,9 +5,9 @@ developer's eyes only; the model must still receive it in full.
 """
 import pytest
 
-from context.debug import build_context_report, abbreviate
-from providers.fake_provider import FakeProvider
-from service import build_context, handle_message
+from chat_manager.context.debug import build_context_report, abbreviate
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import build_context, handle_message
 
 
 def test_report_has_five_labelled_contexts(repo):
@@ -28,7 +28,7 @@ def test_current_query_is_shown(repo):
 
 def test_menu_is_abbreviated_in_report(repo):
     """Developer sees ~100 words; the model still gets all 153 items."""
-    from menu.loader import format_menu_for_prompt
+    from chat_manager.menu.loader import format_menu_for_prompt
     sid = repo.create_session("+9199").session_id
     report = build_context_report(repo, "+9199", sid, "hi")
     full = format_menu_for_prompt()
@@ -38,7 +38,7 @@ def test_menu_is_abbreviated_in_report(repo):
 
 def test_model_still_receives_full_menu(repo):
     """The abbreviation must never leak into what is actually sent."""
-    from menu.loader import menu_items
+    from chat_manager.menu.loader import menu_items
     sid = repo.create_session("+9199").session_id
     msgs = build_context(repo, "+9199", sid, "hi")
     blob = "\n".join(m["content"] for m in msgs)

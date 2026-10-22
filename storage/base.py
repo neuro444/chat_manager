@@ -5,7 +5,7 @@ convenience — omitting it leaks one user's history to another.
 """
 from typing import Protocol
 
-from models import Message, Session, User
+from chat_manager.models import Message, Session, User
 
 
 class ChatRepository(Protocol):

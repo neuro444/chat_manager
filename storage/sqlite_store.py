@@ -4,8 +4,8 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-import config
-from models import Message, Session, User
+import chat_manager.config as config
+from chat_manager.models import Message, Session, User
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (

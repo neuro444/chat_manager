@@ -1,8 +1,8 @@
 """Shared fixtures."""
 import pytest
 
-from providers.fake_provider import FakeProvider
-from storage.memory_store import MemoryStore
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.storage.memory_store import MemoryStore
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def provider():
 def _clean_api_key(monkeypatch):
     """Ensure tests run against an unkeyed baseline by default even if .env
     has either key set."""
-    import config
+    import chat_manager.config as config
     monkeypatch.setattr(config, "TELEPHONY_API_KEY", "")
     monkeypatch.setattr(config, "DASHBOARD_API_KEY", "")
 
@@ -29,7 +29,7 @@ def _clean_api_key(monkeypatch):
 @pytest.fixture
 def sqlite_repo(tmp_path):
     """A real SQLite DB in a temp dir, destroyed after the test."""
-    from storage.sqlite_store import SQLiteStore
+    from chat_manager.storage.sqlite_store import SQLiteStore
     r = SQLiteStore(str(tmp_path / "test.db"))
     r.init_db()
     yield r

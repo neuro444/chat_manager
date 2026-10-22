@@ -1,8 +1,8 @@
 """Tools the model may call. Money arithmetic happens here, never in the LLM."""
 import json
 
-from menu.loader import find_item
-from orders.calculator import calculate_order_total, price_order
+from chat_manager.menu.loader import find_item
+from chat_manager.orders.calculator import calculate_order_total, price_order
 
 TOOL_SCHEMAS = [
     {

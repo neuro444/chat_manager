@@ -2,9 +2,9 @@
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from providers.fake_provider import FakeProvider
-from service import build_context, handle_message
-from storage.mongo_store import MongoStore
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import build_context, handle_message
+from chat_manager.storage.mongo_store import MongoStore
 
 DB = "chat_manager_livetest"
 

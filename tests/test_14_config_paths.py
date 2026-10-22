@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import config
+import chat_manager.config as config
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -45,7 +45,7 @@ def test_data_survives_across_store_instances():
     """Two stores opened by path must see the same rows — the durability claim."""
     import tempfile
 
-    from storage.sqlite_store import SQLiteStore
+    from chat_manager.storage.sqlite_store import SQLiteStore
     db = str(Path(tempfile.mkdtemp()) / "persist.db")
     a = SQLiteStore(db); a.init_db()
     s = a.create_session("+91999", "call one")

@@ -5,7 +5,7 @@ Hard rule: only ever inherit what the user already said; never invent.
 """
 import re
 
-import config
+import chat_manager.config as config
 
 _PROPER = re.compile(r"\b[A-Z][a-zA-Z]{2,}\b")
 _QUOTED = re.compile(r'"([^"]{2,40})"')

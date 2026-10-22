@@ -3,8 +3,8 @@
 If any of these fail, one user can see another user's private conversations.
 """
 import pytest
-from providers.fake_provider import FakeProvider
-from service import build_context, handle_message
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import build_context, handle_message
 
 
 @pytest.fixture(params=["memory", "sqlite"])

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+﻿﻿#!/usr/bin/env python3
 """
 Purge sessions (and their messages) older than RETENTION_DAYS from chat_manager''s database.
 
@@ -26,8 +26,8 @@ from datetime import datetime, timedelta, timezone
 # ensure project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import config  # noqa: E402
-from storage import make_repo  # noqa: E402
+import chat_manager.config as config  # noqa: E402
+from chat_manager.storage import make_repo  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,

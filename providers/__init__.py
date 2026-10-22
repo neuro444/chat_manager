@@ -1,5 +1,5 @@
 """Provider factory."""
-import config
+import chat_manager.config as config
 
 
 def make_provider(name: str | None = None):

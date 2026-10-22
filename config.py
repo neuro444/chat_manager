@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # relative DB path silently creates a fresh empty database when the server is
 # started from somewhere else, which looks exactly like data loss.
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env", override=True)
 
 
 def _int(key, default):

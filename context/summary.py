@@ -1,6 +1,6 @@
 """Rolling summary — compaction of turns that fell out of the window."""
-import config
-from prompts import SUMMARIZER_PROMPT
+import chat_manager.config as config
+from chat_manager.prompts import SUMMARIZER_PROMPT
 
 
 def should_roll(repo, session_id: str) -> bool:

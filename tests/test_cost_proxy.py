@@ -7,14 +7,14 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-import config
+import chat_manager.config as config
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    import api
-    from providers.fake_provider import FakeProvider
-    from storage.sqlite_store import SQLiteStore
+    import chat_manager.api as api
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.storage.sqlite_store import SQLiteStore
 
     repo = SQLiteStore(str(tmp_path / "cost_proxy.db"))
     repo.init_db()

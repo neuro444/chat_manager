@@ -9,15 +9,15 @@ import json
 
 from pydantic import BaseModel
 
-import config
-import tokens
-from context.assembler import assemble
-from context.callflow import parse_model_response
-from context.history import get_history
-from context.memory import build_memory_context
-from context.state import resolve_active_entities
-from context.summary import maybe_roll_summary
-from menu.loader import format_menu_for_prompt
+import chat_manager.config as config
+import chat_manager.tokens as tokens
+from chat_manager.context.assembler import assemble
+from chat_manager.context.callflow import parse_model_response
+from chat_manager.context.history import get_history
+from chat_manager.context.memory import build_memory_context
+from chat_manager.context.state import resolve_active_entities
+from chat_manager.context.summary import maybe_roll_summary
+from chat_manager.menu.loader import format_menu_for_prompt
 
 
 def _debug(msg: str) -> None:
@@ -85,14 +85,14 @@ def _start_turn(repo, user_id, session_id, user_message, new_session=False):
     repo.append_message(session_id, "user", user_message)
     messages = build_context(repo, user_id, session_id, user_message)
     if config.DEBUG_CONTEXT:
-        from context.debug import print_context_report
+        from chat_manager.context.debug import print_context_report
         print_context_report(repo, user_id, session_id, user_message)
     return session_id, is_first_turn, messages
 
 
 def _complete(provider, messages):
     """Call the provider, offering the ordering tools when it supports them."""
-    from orders.tools import TOOL_SCHEMAS
+    from chat_manager.orders.tools import TOOL_SCHEMAS
     try:
         return provider.complete(messages, tools=TOOL_SCHEMAS)
     except TypeError:

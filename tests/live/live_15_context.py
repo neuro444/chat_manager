@@ -2,12 +2,12 @@
 import sys, pathlib, os, tempfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-import config
+import chat_manager.config as config
 config.DEBUG_CONTEXT = True
 
-from providers.openai_provider import OpenAIProvider
-from service import handle_message
-from storage.sqlite_store import SQLiteStore
+from chat_manager.providers.openai_provider import OpenAIProvider
+from chat_manager.service import handle_message
+from chat_manager.storage.sqlite_store import SQLiteStore
 
 PHONE = "+919876543210"
 

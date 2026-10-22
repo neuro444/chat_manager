@@ -29,7 +29,7 @@ def price_order(named_items: list[dict]) -> dict:
     named_items: [{"name": "Samosa", "quantity": 2}, ...]
     Returns the priced lines, any unmatched names, and the totals.
     """
-    from menu.loader import find_item
+    from chat_manager.menu.loader import find_item
 
     lines, unknown = [], []
     for entry in named_items:

@@ -4,8 +4,8 @@ Proves: a prompt built from a system prompt + context + history reaches the
 provider in the right shape, and a reply comes back.
 """
 import pytest
-from providers.fake_provider import FakeProvider
-from context.assembler import assemble
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.context.assembler import assemble
 
 
 def test_assemble_puts_system_prompt_first():

@@ -15,7 +15,7 @@ Conflating the two produces numbers that silently disagree with the invoice.
 """
 import logging
 
-import config
+import chat_manager.config as config
 
 logger = logging.getLogger(__name__)
 

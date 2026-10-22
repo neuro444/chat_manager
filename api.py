@@ -16,11 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-import config
-from providers import make_provider
-from service import handle_message
-from storage import make_repo
-from menu.loader import menu_items
+import chat_manager.config as config
+from chat_manager.providers import make_provider
+from chat_manager.service import handle_message
+from chat_manager.storage import make_repo
+from chat_manager.menu.loader import menu_items
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("chat_manager.api")
@@ -526,7 +526,7 @@ class TTSIn(BaseModel):
 @app.post("/tts", dependencies=[Depends(require_dashboard_key)])
 def tts(body: TTSIn):
     """Text to speech via ElevenLabs. Returns mp3 bytes."""
-    from voice.tts import synthesize
+    from chat_manager.voice.tts import synthesize
     if not config.ELEVENLABS_API_KEY:
         raise HTTPException(503, "ELEVENLABS_API_KEY not configured")
     return Response(content=synthesize(body.text), media_type="audio/mpeg")
@@ -550,6 +550,6 @@ def appcss():
 
 # Imported at the bottom, not the top: cost_proxy imports require_api_key
 # from this module, so importing it earlier would be circular.
-from cost_proxy import router as cost_router  # noqa: E402
+from chat_manager.cost_proxy import router as cost_router  # noqa: E402
 
 app.include_router(cost_router)

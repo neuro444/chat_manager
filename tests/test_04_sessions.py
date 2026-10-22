@@ -1,7 +1,7 @@
 """Layer 4 — multiple sessions: isolation + list/rename/delete/clear."""
 import pytest
-from providers.fake_provider import FakeProvider
-from service import handle_message
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import handle_message
 
 
 @pytest.fixture(params=["memory", "sqlite"])

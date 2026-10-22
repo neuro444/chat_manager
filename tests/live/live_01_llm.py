@@ -5,8 +5,8 @@
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from context.assembler import assemble
-from providers.openai_provider import OpenAIProvider
+from chat_manager.context.assembler import assemble
+from chat_manager.providers.openai_provider import OpenAIProvider
 
 
 def main():

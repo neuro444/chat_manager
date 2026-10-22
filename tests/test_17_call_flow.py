@@ -1,8 +1,8 @@
 """Layer 17 — structured call flow flags and persistence."""
 import json
 
-from context.callflow import parse_model_response
-from context.response_model import CallResponse
+from chat_manager.context.callflow import parse_model_response
+from chat_manager.context.response_model import CallResponse
 
 
 def _raw(answer, **flags):
@@ -49,8 +49,8 @@ def test_plain_text_fallback_never_infers_action_flags():
 
 
 def test_order_flags_are_returned_and_persisted(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     raw = _raw("Order confirmed. CakeWorld Alpharetta.", call_ended=True,
                order_ready=True, order_type="pickup", tools_called=True)
@@ -75,8 +75,8 @@ def test_order_flags_are_returned_and_persisted(repo):
 
 
 def test_current_call_name_reaches_verified_order_without_profile_write(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     raw = _raw(
         "Maya, your order is confirmed.", call_ended=True,
@@ -100,8 +100,8 @@ def test_current_call_name_reaches_verified_order_without_profile_write(repo):
 
 
 def test_verified_order_uses_no_name_sentinel_when_name_is_unavailable(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     raw = _raw(
         "Your order is confirmed.", call_ended=True, order_ready=True,
@@ -117,8 +117,8 @@ def test_verified_order_uses_no_name_sentinel_when_name_is_unavailable(repo):
 
 
 def test_manager_flag_is_returned_and_persisted(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     raw = _raw("Our manager will contact you.", call_ended=True,
                To_manager=True, order_type="catering", summary="Office catering",
@@ -157,8 +157,8 @@ def test_order_type_is_constrained_to_the_canonical_set():
 
 
 def test_direct_manager_transfer_is_returned_and_persisted(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     raw = _raw("I'll connect you with restaurant staff.",
                Transfer_to_Manager=True,
@@ -182,7 +182,7 @@ def test_schema_rejects_fields_outside_the_response_contract():
     import pytest
     from pydantic import ValidationError
 
-    from context.response_model import CallResponse
+    from chat_manager.context.response_model import CallResponse
 
     with pytest.raises(ValidationError):
         CallResponse.model_validate({
@@ -202,8 +202,8 @@ def test_schema_rejects_fields_outside_the_response_contract():
 
 
 def test_session_marked_ended_from_json(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     out = handle_message(repo, FakeProvider(_raw("Done.", call_ended=True)),
                          "+9199", None, "that's all")
@@ -211,8 +211,8 @@ def test_session_marked_ended_from_json(repo):
 
 
 def test_open_call_is_not_marked_ended(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     out = handle_message(repo, FakeProvider(_raw("Anything else?")),
                          "+9199", None, "two samosas")
@@ -220,8 +220,8 @@ def test_open_call_is_not_marked_ended(repo):
 
 
 def test_ended_session_is_not_resumed(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     first = handle_message(repo, FakeProvider(_raw("Bye.", call_ended=True)),
                            "+9199", None, "done")["session_id"]
@@ -238,7 +238,7 @@ def test_prompt_states_the_facts_the_model_cannot_infer():
     must survive a rewrite is the restaurant's actual data and the integration
     values, not the phrasing around them.
     """
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
 
     for fact in (
         "cakeworldeatery.com",
@@ -255,7 +255,7 @@ def test_prompt_states_the_facts_the_model_cannot_infer():
 
 def test_prompt_explains_what_each_control_flag_means():
     """Structured Outputs enforces shape; the prompt supplies the semantics."""
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     for field in ("call_ended", "order_ready", "order_type", "To_manager",
@@ -273,7 +273,7 @@ def test_prompt_does_not_restate_the_json_shape_the_schema_enforces():
     Re-adding it would reintroduce the prose-plus-object pattern that leaked
     JSON into speech.
     """
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
 
     assert '{"answer"' not in SYSTEM_PROMPT
     assert "Return exactly one valid JSON object" not in SYSTEM_PROMPT
@@ -282,7 +282,7 @@ def test_prompt_does_not_restate_the_json_shape_the_schema_enforces():
 
 
 def test_prompt_keeps_current_call_state_and_ignores_past_classification():
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "not a new call" in prompt
@@ -294,7 +294,7 @@ def test_prompt_keeps_current_call_state_and_ignores_past_classification():
 
 def test_prompt_routes_cake_and_catering_without_mandating_followups():
     """The intake machinery was removed; the opening and gate remain."""
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "Cake orders are handled by my manager" in prompt
@@ -309,7 +309,7 @@ def test_prompt_routes_cake_and_catering_without_mandating_followups():
 
 
 def test_prompt_offers_several_matches_instead_of_choosing_one():
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "name two or three and ask" in prompt
@@ -318,7 +318,7 @@ def test_prompt_offers_several_matches_instead_of_choosing_one():
 
 
 def test_callback_speech_fragments_get_one_retry_then_handoff():
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "A broken or cut-off stretch of speech is not an order detail" in prompt
@@ -330,7 +330,7 @@ def test_callback_speech_fragments_get_one_retry_then_handoff():
 
 
 def test_callback_fragment_few_shots_cover_retry_and_ignore_paths():
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "Speech that does not come through during a manager callback" in prompt
@@ -347,7 +347,7 @@ def test_a_known_name_is_reused_instead_of_asked_for_again():
     shared-family-phone concern now applies only to cake/catering callbacks,
     where the manager phones the person later and no one is there to correct it.
     """
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "from this call or from their history" in prompt
@@ -365,7 +365,7 @@ def test_a_non_answer_to_the_name_question_does_not_trigger_a_second_ask():
     In the live call the caller answered "mine" and Divya asked again, which
     step 4 forbids.
     """
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "at most once in a call" in prompt
@@ -374,7 +374,7 @@ def test_a_non_answer_to_the_name_question_does_not_trigger_a_second_ask():
 
 
 def test_callback_names_still_guard_against_shared_family_phones():
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
     prompt = " ".join(SYSTEM_PROMPT.split())
 
     assert "cake or catering callback" in prompt
@@ -382,7 +382,7 @@ def test_callback_names_still_guard_against_shared_family_phones():
 
 
 def test_summarizer_preserves_name_question_state_without_inventing_identity():
-    from prompts import SUMMARIZER_PROMPT
+    from chat_manager.prompts import SUMMARIZER_PROMPT
     prompt = " ".join(SUMMARIZER_PROMPT.split())
 
     assert "caller's own message explicitly stated or corrected it" in prompt
@@ -392,8 +392,8 @@ def test_summarizer_preserves_name_question_state_without_inventing_identity():
 
 
 def test_model_cannot_mark_order_ready_without_actual_pricing_tool(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     raw = _raw("Order confirmed.", order_ready=True, tools_called=True)
     out = handle_message(repo, FakeProvider(raw), "+9188", None, "pickup")

@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 
 from pymongo import ASCENDING, DESCENDING, MongoClient, TEXT
 
-import config
-from models import Message, Session, User
+import chat_manager.config as config
+from chat_manager.models import Message, Session, User
 
 
 def _now():

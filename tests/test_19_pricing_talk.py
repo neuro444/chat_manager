@@ -3,7 +3,7 @@
 Menu prices while discussing items; the tool only at the final review, where
 unit prices are read back before the total.
 """
-from prompts import SYSTEM_PROMPT
+from chat_manager.prompts import SYSTEM_PROMPT
 
 
 def test_prompt_says_quote_menu_price_while_discussing():
@@ -66,7 +66,7 @@ def test_prompt_makes_tax_inclusive_total_clear_without_breakdown():
 
 def test_price_order_still_returns_line_items_for_the_readback():
     """The readback needs per-item unit prices, not just a total."""
-    from orders.calculator import price_order
+    from chat_manager.orders.calculator import price_order
     out = price_order([{"name": "Samosa", "quantity": 2},
                        {"name": "Malabar Chicken Biriyani", "quantity": 1}])
     assert [i["price"] for i in out["items"]] == [5.99, 15.99]
@@ -76,5 +76,5 @@ def test_price_order_still_returns_line_items_for_the_readback():
 
 
 def test_lookup_item_gives_the_untaxed_menu_price():
-    from menu.loader import find_item
+    from chat_manager.menu.loader import find_item
     assert find_item("Malabar Chicken Biriyani")["price"] == 15.99

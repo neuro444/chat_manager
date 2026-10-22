@@ -5,9 +5,9 @@ between a chat toy and a chat product.
 """
 import pytest
 
-from providers.fake_provider import FakeProvider
-from service import handle_message
-from storage.sqlite_store import SQLiteStore
+from chat_manager.providers.fake_provider import FakeProvider
+from chat_manager.service import handle_message
+from chat_manager.storage.sqlite_store import SQLiteStore
 
 
 def test_messages_survive_reconnect(tmp_path):

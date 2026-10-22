@@ -5,13 +5,13 @@ Two invariants this module must never break:
   - the system prompt is first
   - the current user message is last and is never trimmed
 """
-from config import (
+from chat_manager.config import (
     CHARS_PER_TOKEN,
     CONTEXT_BUDGET_WEIGHTS,
     MAX_CONTEXT_TOKENS,
     RESERVED_FOR_REPLY,
 )
-from prompts import SYSTEM_PROMPT
+from chat_manager.prompts import SYSTEM_PROMPT
 
 # Retrieved text is data, not instructions. The header says so explicitly so a
 # prompt-injection attempt inside stored content has less leverage.

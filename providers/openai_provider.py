@@ -20,8 +20,8 @@ from typing import Iterator
 
 from openai import APIError, OpenAI, RateLimitError
 
-import config
-from context.response_model import CallResponse
+import chat_manager.config as config
+from chat_manager.context.response_model import CallResponse
 
 
 def split_instructions(messages: list[dict]) -> tuple[str, list[dict]]:
@@ -52,7 +52,7 @@ class OpenAIProvider:
 
     def _record_usage(self, response) -> None:
         """Accumulate the API's reported usage for this turn."""
-        from tokens import usage_from_response
+        from chat_manager.tokens import usage_from_response
 
         usage = usage_from_response(response)
         if usage is None:
@@ -103,7 +103,7 @@ class OpenAIProvider:
 
     def _complete_with_tools(self, messages: list[dict], tools) -> CallResponse:
         """One round of tool use: call, run any tool, feed results back."""
-        from orders.tools import TOOL_SCHEMAS, run_tool
+        from chat_manager.orders.tools import TOOL_SCHEMAS, run_tool
 
         convo = list(messages)
         resp = self._create(convo, tools=TOOL_SCHEMAS)
@@ -146,7 +146,7 @@ class OpenAIProvider:
                     yield delta
 
     def count_tokens(self, text: str) -> int:
-        from tokens import count_text
+        from chat_manager.tokens import count_text
 
         return count_text(text)
 

@@ -2,8 +2,8 @@
 import json
 import pytest
 
-from menu.loader import format_menu_for_prompt, find_item, load_menu, menu_items
-from orders.calculator import calculate_order_total
+from chat_manager.menu.loader import format_menu_for_prompt, find_item, load_menu, menu_items
+from chat_manager.orders.calculator import calculate_order_total
 
 
 # ── calculator ───────────────────────────
@@ -56,7 +56,7 @@ def test_menu_is_sent_as_csv_not_json():
 
 def test_menu_prompt_fits_budget():
     """Raw JSON is ~5k tokens and would be truncated; compact form must fit."""
-    import config
+    import chat_manager.config as config
     text = format_menu_for_prompt()
     budget = int((config.MAX_CONTEXT_TOKENS - config.RESERVED_FOR_REPLY)
                  * config.CONTEXT_BUDGET_WEIGHTS["domain"])
@@ -79,8 +79,8 @@ def test_find_item_exact_and_fuzzy():
 
 # ── caller names remain model context, not Python identity ────────────────
 def test_static_profile_name_is_not_injected_into_model_context(repo):
-    from providers.fake_provider import FakeProvider
-    from service import build_context, handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import build_context, handle_message
     repo.set_user_name("+919876543210", "StaleName")
     handle_message(repo, FakeProvider(), "+919876543210", None, "one samosa")
     sid = repo.list_sessions("+919876543210")[0].session_id
@@ -91,8 +91,8 @@ def test_static_profile_name_is_not_injected_into_model_context(repo):
 
 
 def test_python_does_not_extract_or_store_name_from_conversation(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
     handle_message(repo, FakeProvider(), "+911111111111", None,
                    "Hi, this is Priya, I'd like a dosa")
     assert repo.get_user("+911111111111").name == ""
@@ -101,8 +101,8 @@ def test_python_does_not_extract_or_store_name_from_conversation(repo):
 # ── session expiry ───────────────────────
 def test_expired_session_starts_fresh(repo):
     from datetime import datetime, timedelta, timezone
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
 
     out = handle_message(repo, FakeProvider(), "+912222222222", None, "one naan")
     sid = out["session_id"]
@@ -114,8 +114,8 @@ def test_expired_session_starts_fresh(repo):
 
 
 def test_recent_session_is_resumed(repo):
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
     out = handle_message(repo, FakeProvider(), "+913333333333", None, "one naan")
     out2 = handle_message(repo, FakeProvider(), "+913333333333", out["session_id"],
                           "and a lassi")

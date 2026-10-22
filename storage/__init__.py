@@ -1,5 +1,5 @@
 """Storage factory."""
-import config
+import chat_manager.config as config
 
 
 def make_repo(kind: str | None = None):

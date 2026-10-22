@@ -10,14 +10,14 @@ point of splitting the keys), and auth stays invisible when both are unset.
 import pytest
 from fastapi.testclient import TestClient
 
-import config
+import chat_manager.config as config
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    import api
-    from providers.fake_provider import FakeProvider
-    from storage.sqlite_store import SQLiteStore
+    import chat_manager.api as api
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.storage.sqlite_store import SQLiteStore
 
     repo = SQLiteStore(str(tmp_path / "auth.db"))
     repo.init_db()
@@ -117,7 +117,7 @@ def test_auth_disabled_when_both_keys_unset(client, monkeypatch):
 
 
 def test_startup_check_warns_when_telephony_key_unset(caplog, monkeypatch):
-    import api
+    import chat_manager.api as api
     import logging
     monkeypatch.setattr(config, "TELEPHONY_API_KEY", "")
     monkeypatch.setattr(config, "DASHBOARD_API_KEY", "d4shboard")
@@ -128,7 +128,7 @@ def test_startup_check_warns_when_telephony_key_unset(caplog, monkeypatch):
 
 
 def test_startup_check_warns_when_dashboard_key_unset(caplog, monkeypatch):
-    import api
+    import chat_manager.api as api
     import logging
     monkeypatch.setattr(config, "TELEPHONY_API_KEY", "t3l3phony")
     monkeypatch.setattr(config, "DASHBOARD_API_KEY", "")
@@ -139,7 +139,7 @@ def test_startup_check_warns_when_dashboard_key_unset(caplog, monkeypatch):
 
 
 def test_startup_check_logs_info_when_both_keys_set(caplog, monkeypatch):
-    import api
+    import chat_manager.api as api
     import logging
     monkeypatch.setattr(config, "TELEPHONY_API_KEY", "t3l3phony")
     monkeypatch.setattr(config, "DASHBOARD_API_KEY", "d4shboard")

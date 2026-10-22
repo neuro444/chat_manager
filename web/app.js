@@ -756,7 +756,7 @@ function renderCostSummary(summary) {
     rows = [
       ["Total cost", fmtUsd(summary.total_cost_usd)],
       ["Calls", String(summary.call_count)],
-      ["Total billed mins", summary.total_billed_minutes != null ? Number(summary.total_billed_minutes).toFixed(1) + "min" : "—"],
+      ["Total voice minutes", summary.total_billed_minutes != null ? Number(summary.total_billed_minutes).toFixed(1) + "min" : "—"],
       ["Avg cost / call", fmtUsd(summary.avg_cost_per_call_usd)],
       ["OpenAI", fmtUsd(summary.openai_cost_usd)],
       ["ElevenLabs", fmtUsd(summary.elevenlabs_cost_usd)],

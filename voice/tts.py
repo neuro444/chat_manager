@@ -4,7 +4,7 @@ Uses the REST endpoint directly so the SDK is not a hard dependency.
 """
 import httpx
 
-import config
+import chat_manager.config as config
 
 _URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 

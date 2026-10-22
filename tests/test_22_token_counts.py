@@ -7,15 +7,15 @@ Two sources that must never be silently conflated: the API's reported usage
 import pytest
 from fastapi.testclient import TestClient
 
-import config
-import tokens
+import chat_manager.config as config
+import chat_manager.tokens as tokens
 
 
 @pytest.fixture
 def client(tmp_path):
-    import api
-    from providers.fake_provider import FakeProvider
-    from storage.sqlite_store import SQLiteStore
+    import chat_manager.api as api
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.storage.sqlite_store import SQLiteStore
 
     repo = SQLiteStore(str(tmp_path / "tok.db"))
     repo.init_db()
@@ -172,7 +172,7 @@ def test_a_longer_conversation_reports_more_input_tokens(client):
 
 def test_token_fields_cannot_be_overridden_by_the_model(client, monkeypatch):
     """A prompt echoing these names must not overwrite the measured values."""
-    import service
+    import chat_manager.service as service
 
     parsed = {"answer": "hi", "call_ended": False, "order_ready": False,
               "To_manager": False, "tools_called": False, "summary": "",
@@ -184,7 +184,7 @@ def test_token_fields_cannot_be_overridden_by_the_model(client, monkeypatch):
 
 def test_usage_is_persisted_with_the_message(client):
     """Past turns stay auditable after the fact."""
-    import api
+    import chat_manager.api as api
 
     data = client.post("/chat", json={"user_id": "+15551234567",
                                       "message": "two samosas"}).json()
@@ -295,7 +295,7 @@ def test_tts_chars_handles_an_empty_answer():
 
 
 def test_latency_fields_cannot_be_overridden_by_the_model():
-    import service
+    import chat_manager.service as service
 
     parsed = {"answer": "hi", "call_ended": False, "order_ready": False,
               "To_manager": False, "tools_called": False, "summary": "",

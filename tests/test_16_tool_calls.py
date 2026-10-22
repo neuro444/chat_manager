@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from orders.tools import TOOL_SCHEMAS, run_tool
+from chat_manager.orders.tools import TOOL_SCHEMAS, run_tool
 
 
 class ToolCallingProvider:
@@ -81,7 +81,7 @@ def test_unknown_tool_name_is_handled():
 
 def test_service_offers_tools_to_the_provider(repo):
     """The pipeline must actually pass TOOL_SCHEMAS through to the provider."""
-    from service import handle_message
+    from chat_manager.service import handle_message
     provider = ToolCallingProvider()
     handle_message(repo, provider, "+9199", None, "two samosas and a gobi manchurian")
     assert provider.tool_calls, "price_order was never offered/called"
@@ -89,7 +89,7 @@ def test_service_offers_tools_to_the_provider(repo):
 
 
 def test_answer_is_derived_from_tool_result(repo):
-    from service import handle_message
+    from chat_manager.service import handle_message
     provider = ToolCallingProvider()
     out = handle_message(repo, provider, "+9199", None, "two samosas and a gobi manchurian")
     assert "25.83" in out["answer"]
@@ -97,7 +97,7 @@ def test_answer_is_derived_from_tool_result(repo):
 
 def test_provider_without_tool_support_still_works(repo):
     """Fallback path: a provider whose complete() takes no `tools` kwarg."""
-    from providers.fake_provider import FakeProvider
-    from service import handle_message
+    from chat_manager.providers.fake_provider import FakeProvider
+    from chat_manager.service import handle_message
     out = handle_message(repo, FakeProvider("plain"), "+9199", None, "hi")
     assert out["answer"] == "plain"

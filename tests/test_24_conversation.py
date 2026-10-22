@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from context.response_model import CallResponse
-from service import handle_message
+from chat_manager.context.response_model import CallResponse
+from chat_manager.service import handle_message
 
 
 def _reply(answer, **flags):
@@ -163,7 +163,7 @@ def test_the_system_prompt_stays_small():
     accretion, and that density is what made rules collide. If a change needs
     this raised, that is a decision to make deliberately, not by drift.
     """
-    from prompts import SYSTEM_PROMPT
+    from chat_manager.prompts import SYSTEM_PROMPT
 
     assert len(SYSTEM_PROMPT) < 20_000, (
         f"system prompt is {len(SYSTEM_PROMPT)} chars "
@@ -173,9 +173,9 @@ def test_the_system_prompt_stays_small():
 
 def test_history_budget_leaves_room_for_a_long_call():
     """The cut exists to buy history room; assert it actually did."""
-    import config
-    from context.assembler import assemble
-    from prompts import SYSTEM_PROMPT
+    import chat_manager.config as config
+    from chat_manager.context.assembler import assemble
+    from chat_manager.prompts import SYSTEM_PROMPT
 
     history = [{"role": "user" if i % 2 == 0 else "assistant",
                 "content": f"turn {i} " + "x" * 200} for i in range(200)]

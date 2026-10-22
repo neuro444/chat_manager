@@ -3,10 +3,10 @@
 Prints the five contexts that feed a turn. The menu is abbreviated here for
 readability — the model always receives it in full via context/assembler.py.
 """
-import config
-from context.memory import build_memory_context
-from context.state import resolve_active_entities
-from menu.loader import format_menu_for_prompt
+import chat_manager.config as config
+from chat_manager.context.memory import build_memory_context
+from chat_manager.context.state import resolve_active_entities
+from chat_manager.menu.loader import format_menu_for_prompt
 
 PAST_SESSION_LIMIT = 20
 _RULE = "─" * 72

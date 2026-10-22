@@ -1,5 +1,5 @@
 """Structured model-response handling for call control."""
-from context.response_model import CallResponse
+from chat_manager.context.response_model import CallResponse
 
 _ORDER_TYPES = {"pickup", "cake", "catering", "cake/catering", "delivery"}
 
