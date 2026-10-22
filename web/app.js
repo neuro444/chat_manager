@@ -588,7 +588,7 @@ async function loadCostToday() {
     const cards = [
       ["Phone", fmtUsd(d.phone_cost_usd)],
       ["WhatsApp", "not yet tracked"],
-      ["Fixed (server)", fmtUsd(d.fixed_cost_usd)],
+      ["Fixed", fmtUsd(d.fixed_cost_usd)],
       ["Total today", fmtUsd(d.total_cost_usd)],
     ];
     cards.forEach(([label, value]) => {
@@ -721,8 +721,8 @@ function renderCostSummary(summary) {
     ["OpenAI", fmtUsd(summary.openai_cost_usd)],
     ["ElevenLabs", fmtUsd(summary.elevenlabs_cost_usd)],
     ["Plivo", fmtUsd(summary.plivo_cost_usd)],
-    ["Fixed (server)", fmtUsd(summary.fixed_cost_usd)],
-    ["Fixed (EL Plan)", fmtUsd(summary.fixed_elevenlabs_plan_usd)],
+    ["Fixed", fmtUsd(summary.fixed_cost_usd)],
+    ["Fixed ElevenLabs", fmtUsd(summary.fixed_elevenlabs_plan_usd)],
   ];
 
   rows.forEach(([label, value]) => {
@@ -746,8 +746,8 @@ const BREAKDOWN_COLUMNS = [
   ["openai_cost_usd", "OpenAI"],
   ["elevenlabs_cost_usd", "ElevenLabs"],
   ["plivo_cost_usd", "Plivo"],
-  ["fixed_cost_usd", "Fixed (Server)"],
-  ["fixed_elevenlabs_plan_usd", "Fixed (EL Plan)"],
+  ["fixed_cost_usd", "Fixed"],
+  ["fixed_elevenlabs_plan_usd", "Fixed ElevenLabs"],
   ["total_cost_usd", "Total"],
 ];
 
