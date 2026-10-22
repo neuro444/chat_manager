@@ -86,13 +86,14 @@
   <div id="cost-content" class="cost-content hidden">
     <nav class="tabs cost-subtabs">
       <button id="cost-subtab-overview" class="tab active">Overview</button>
-      <button id="cost-subtab-rates" class="tab">Rates</button>
+      <button id="cost-subtab-rates" class="tab">Fixed Costs & Rates</button>
     </nav>
 
     <div id="cost-overview">
     <nav class="cost-agent-tabs" id="cost-agent-tabs">
       <button class="cost-agent-tab active" data-provider="elevenlabs">ElevenLabs</button>
       <button class="cost-agent-tab" data-provider="plivo">Plivo</button>
+      <button class="cost-agent-tab" data-provider="llm">LLM</button>
     </nav>
 
     <section class="pane cost-summary">
@@ -120,6 +121,7 @@
         <option value="openai">OpenAI</option>
         <option value="elevenlabs" selected>ElevenLabs</option>
         <option value="plivo">Plivo</option>
+        <option value="llm">LLM</option>
       </select>
     </div>
 
@@ -156,6 +158,25 @@
     </div>
 
     <div id="cost-rates" class="hidden">
+      <section class="pane fixed-costs-pane" style="margin-bottom: 12px;">
+        <h2>Subscription & Fixed Overhead</h2>
+        <div class="cost-filter-presets" id="fixed-cost-date-presets">
+          <button class="filter-btn active" data-range="today">Today</button>
+          <button class="filter-btn" data-range="7d">Last 7 days</button>
+          <button class="filter-btn" data-range="30d">Last 30 days</button>
+          <button class="filter-btn" data-range="month">This month</button>
+          <button class="filter-btn" data-range="year">This year</button>
+          <button class="filter-btn" data-range="custom">Custom…</button>
+        </div>
+        <div id="fixed-cost-custom-range" class="cost-custom-range hidden" style="margin-top: 8px;">
+          <input type="date" id="fixed-cost-range-start">
+          <span class="muted">to</span>
+          <input type="date" id="fixed-cost-range-end">
+          <button id="fixed-cost-custom-apply" class="newbtn">Apply</button>
+        </div>
+        <div id="fixed-cost-summary-cards" class="cost-cards" style="margin-top: 14px;"></div>
+      </section>
+
       <section class="pane rates-add">
         <h2>Add rate</h2>
         <form id="rate-form" class="rate-form">

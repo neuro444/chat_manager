@@ -583,6 +583,31 @@ async function loadCostToday() {
   const box = $("cost-today");
   box.innerHTML = '<div class="empty">Loading…</div>';
   try {
+    if (costState.provider === "llm") {
+      const today = isoDate(new Date());
+      const d = await api(`/cost/api/internal/costs/breakdown?start_date=${today}&end_date=${today}`);
+      const s = d.summary || {};
+      box.innerHTML = "";
+      const cards = [
+        ["Tokens today", (s.total_tokens || 0).toLocaleString()],
+        ["Input tokens", (s.input_tokens || 0).toLocaleString()],
+        ["Output tokens", (s.output_tokens || 0).toLocaleString()],
+        ["LLM spend today", fmtUsd(s.llm_cost_usd || "0")],
+      ];
+      cards.forEach(([label, value]) => {
+        const card = document.createElement("div");
+        card.className = "cost-card";
+        const labelEl = document.createElement("div");
+        labelEl.className = "cost-card-label";
+        labelEl.textContent = label;
+        const valueEl = document.createElement("div");
+        valueEl.className = "cost-card-value";
+        valueEl.textContent = value;
+        card.append(labelEl, valueEl);
+        box.appendChild(card);
+      });
+      return;
+    }
     const d = await api("/cost/api/internal/costs/daily");
     box.innerHTML = "";
     const cards = [
@@ -713,17 +738,32 @@ function renderCostCallsTable() {
 function renderCostSummary(summary) {
   const box = $("cost-summary-panel");
   box.innerHTML = "";
-  const rows = [
-    ["Total cost", fmtUsd(summary.total_cost_usd)],
-    ["Calls", String(summary.call_count)],
-    ["Total billed mins", summary.total_billed_minutes != null ? Number(summary.total_billed_minutes).toFixed(1) + "m" : "—"],
-    ["Avg cost / call", fmtUsd(summary.avg_cost_per_call_usd)],
-    ["OpenAI", fmtUsd(summary.openai_cost_usd)],
-    ["ElevenLabs", fmtUsd(summary.elevenlabs_cost_usd)],
-    ["Plivo", fmtUsd(summary.plivo_cost_usd)],
-    ["Fixed", fmtUsd(summary.fixed_cost_usd)],
-    ["Fixed ElevenLabs", fmtUsd(summary.fixed_elevenlabs_plan_usd)],
-  ];
+  let rows;
+  if (costState.provider === "llm") {
+    const totalTokens = summary.total_tokens || 0;
+    const calls = summary.call_count || 0;
+    const avgTok = calls ? Math.round(totalTokens / calls) : 0;
+    rows = [
+      ["LLM Spend", fmtUsd(summary.llm_cost_usd)],
+      ["Calls", String(calls)],
+      ["Total tokens", totalTokens.toLocaleString()],
+      ["Input tokens", (summary.input_tokens || 0).toLocaleString()],
+      ["Cached tokens", (summary.cached_input_tokens || 0).toLocaleString()],
+      ["Output tokens", (summary.output_tokens || 0).toLocaleString()],
+      ["Avg tokens / call", avgTok.toLocaleString()],
+    ];
+  } else {
+    rows = [
+      ["Total cost", fmtUsd(summary.total_cost_usd)],
+      ["Calls", String(summary.call_count)],
+      ["Total billed mins", summary.total_billed_minutes != null ? Number(summary.total_billed_minutes).toFixed(1) + "m" : "—"],
+      ["Avg cost / call", fmtUsd(summary.avg_cost_per_call_usd)],
+      ["OpenAI", fmtUsd(summary.openai_cost_usd)],
+      ["ElevenLabs", fmtUsd(summary.elevenlabs_cost_usd)],
+      ["Plivo", fmtUsd(summary.plivo_cost_usd)],
+      ["Fixed", fmtUsd(summary.fixed_cost_usd)],
+    ];
+  }
 
   rows.forEach(([label, value]) => {
     const row = document.createElement("div");
@@ -747,8 +787,17 @@ const BREAKDOWN_COLUMNS = [
   ["elevenlabs_cost_usd", "ElevenLabs"],
   ["plivo_cost_usd", "Plivo"],
   ["fixed_cost_usd", "Fixed"],
-  ["fixed_elevenlabs_plan_usd", "Fixed ElevenLabs"],
   ["total_cost_usd", "Total"],
+];
+
+const LLM_BREAKDOWN_COLUMNS = [
+  ["period", "Date"],
+  ["call_count", "Calls"],
+  ["input_tokens", "Input Tokens"],
+  ["cached_input_tokens", "Cached Tokens"],
+  ["output_tokens", "Output Tokens"],
+  ["total_tokens", "Total Tokens"],
+  ["llm_cost_usd", "LLM Spend"],
 ];
 
 async function loadCostBreakdownAndSummary() {
@@ -774,7 +823,9 @@ async function loadCostBreakdownAndSummary() {
   const table = document.createElement("table");
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  BREAKDOWN_COLUMNS.forEach(([, label]) => {
+  const isLlm = costState.provider === "llm";
+  const cols = isLlm ? LLM_BREAKDOWN_COLUMNS : BREAKDOWN_COLUMNS;
+  cols.forEach(([, label]) => {
     const th = document.createElement("th");
     th.textContent = label;
     headRow.appendChild(th);
@@ -785,11 +836,14 @@ async function loadCostBreakdownAndSummary() {
   periods.slice().reverse().forEach((p) => {
     const tr = document.createElement("tr");
     tr.className = "cost-row";
-    BREAKDOWN_COLUMNS.forEach(([key]) => {
+    cols.forEach(([key]) => {
       const td = document.createElement("td");
       if (key === "period") td.textContent = p.period;
       else if (key === "call_count") td.textContent = String(p.call_count);
       else if (key === "billed_minutes") td.textContent = p.billed_minutes != null ? Number(p.billed_minutes).toFixed(1) + "m" : "—";
+      else if (["input_tokens", "cached_input_tokens", "output_tokens", "total_tokens"].includes(key)) {
+        td.textContent = Number(p[key] || 0).toLocaleString();
+      }
       else td.textContent = fmtUsd(p[key]);
       tr.appendChild(td);
     });
@@ -825,15 +879,112 @@ async function openCostDrilldown(callId) {
 }
 $("cost-drilldown-close").onclick = () => $("cost-drilldown").classList.add("hidden");
 
-// ── rates admin ───────────────────────────
+// ── fixed costs & rates admin ─────────────
 let ratesLoaded = false;
+
+const fixedCostState = {
+  range: "today",
+  startDate: null,
+  endDate: null,
+};
+
+function applyFixedCostRange(range) {
+  fixedCostState.range = range;
+  document.querySelectorAll("#fixed-cost-date-presets .filter-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.range === range);
+  });
+  const customBox = $("fixed-cost-custom-range");
+  if (customBox) customBox.classList.toggle("hidden", range !== "custom");
+  if (range === "custom") {
+    if (!fixedCostState.startDate || !fixedCostState.endDate) return;
+  }
+  const { start, end } = computeRangeDates(range);
+  fixedCostState.startDate = start;
+  fixedCostState.endDate = end;
+  loadFixedCostsSection();
+}
+
+document.querySelectorAll("#fixed-cost-date-presets .filter-btn").forEach((btn) => {
+  btn.onclick = () => applyFixedCostRange(btn.dataset.range);
+});
+
+if ($("fixed-cost-custom-apply")) {
+  $("fixed-cost-custom-apply").onclick = () => {
+    const start = $("fixed-cost-range-start").value;
+    const end = $("fixed-cost-range-end").value;
+    if (!start || !end) return;
+    fixedCostState.startDate = start;
+    fixedCostState.endDate = end;
+    loadFixedCostsSection();
+  };
+}
+
+async function loadFixedCostsSection() {
+  const box = $("fixed-cost-summary-cards");
+  if (!box) return;
+  box.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const { start, end } = computeRangeDates(fixedCostState.range);
+    fixedCostState.startDate = start;
+    fixedCostState.endDate = end;
+    const params = new URLSearchParams({
+      start_date: fixedCostState.startDate,
+      end_date: fixedCostState.endDate,
+    });
+    const d = await api(`/cost/api/internal/costs/breakdown?${params}`);
+    const summary = d.summary || {};
+    const elPlan = Number(summary.fixed_elevenlabs_plan_usd || 0);
+    const server = Number(summary.fixed_cost_usd || 0);
+    const totalFixed = elPlan + server;
+
+    box.innerHTML = "";
+    const cards = [
+      {
+        label: "Fixed (EL Scale Plan)",
+        value: fmtUsd(elPlan),
+        sub: "$299.00/mo ($0 if inactive)",
+      },
+      {
+        label: "Fixed (Server VPS)",
+        value: fmtUsd(server),
+        sub: "$28.85/mo baseline",
+      },
+      {
+        label: "Total Fixed Overhead",
+        value: fmtUsd(totalFixed),
+        sub: `Amortized for ${fixedCostState.range}`,
+      },
+    ];
+
+    cards.forEach((c) => {
+      const card = document.createElement("div");
+      card.className = "cost-card";
+      const labelEl = document.createElement("div");
+      labelEl.className = "cost-card-label";
+      labelEl.textContent = c.label;
+      const valueEl = document.createElement("div");
+      valueEl.className = "cost-card-value";
+      valueEl.textContent = c.value;
+      const subEl = document.createElement("div");
+      subEl.className = "cost-card-sub";
+      subEl.textContent = c.sub;
+      card.append(labelEl, valueEl, subEl);
+      box.appendChild(card);
+    });
+  } catch (err) {
+    renderEmpty(box, `Fixed cost data unavailable (${err.message}).`);
+  }
+}
 
 function showCostSubtab(sub) {
   $("cost-overview").classList.toggle("hidden", sub !== "overview");
   $("cost-rates").classList.toggle("hidden", sub !== "rates");
   $("cost-subtab-overview").classList.toggle("active", sub === "overview");
   $("cost-subtab-rates").classList.toggle("active", sub === "rates");
-  if (sub === "rates" && !ratesLoaded) loadRatesTable();
+  if (sub === "rates") {
+    loadFixedCostsSection();
+    if (!ratesLoaded) loadRatesTable();
+  }
 }
 $("cost-subtab-overview").onclick = () => showCostSubtab("overview");
 $("cost-subtab-rates").onclick = () => showCostSubtab("rates");
