@@ -1,4 +1,4 @@
-﻿// Staff dashboard. Callers are phone numbers; there is no login.
+// Staff dashboard. Callers are phone numbers; there is no login.
 const $ = (id) => document.getElementById(id);
 const state = {
   caller: null, session: null, sessions: [], forceNewSession: false,
@@ -646,7 +646,7 @@ const CALLS_COLUMNS = [
   { key: "status", label: "Status" },
   { key: "providers", label: "Providers" },
   { key: "total_duration_s", label: "Duration (s)" },
-  { key: "billed_minutes", label: "Billed Mins" },
+  { key: "billed_minutes", label: "Billed Voice Mins" },
   { key: "total_input_tokens", label: "Input tokens" },
   { key: "total_output_tokens", label: "Output tokens" },
   { key: "total_cost_usd", label: "Cost" },
@@ -718,7 +718,7 @@ function renderCostCallsTable() {
       c.status,
       (c.providers || []).join(", "),
       c.total_duration_s != null ? String(c.total_duration_s) : "—",
-      c.billed_minutes != null ? Number(c.billed_minutes).toFixed(1) + "m" : "—",
+      c.billed_minutes != null ? Number(c.billed_minutes).toFixed(1) + "min" : "—",
       String(c.total_input_tokens ?? 0),
       String(c.total_output_tokens ?? 0),
       fmtUsd(c.total_cost_usd),
@@ -756,7 +756,7 @@ function renderCostSummary(summary) {
     rows = [
       ["Total cost", fmtUsd(summary.total_cost_usd)],
       ["Calls", String(summary.call_count)],
-      ["Total billed mins", summary.total_billed_minutes != null ? Number(summary.total_billed_minutes).toFixed(1) + "m" : "—"],
+      ["Total billed mins", summary.total_billed_minutes != null ? Number(summary.total_billed_minutes).toFixed(1) + "min" : "—"],
       ["Avg cost / call", fmtUsd(summary.avg_cost_per_call_usd)],
       ["OpenAI", fmtUsd(summary.openai_cost_usd)],
       ["ElevenLabs", fmtUsd(summary.elevenlabs_cost_usd)],
@@ -840,7 +840,7 @@ async function loadCostBreakdownAndSummary() {
       const td = document.createElement("td");
       if (key === "period") td.textContent = p.period;
       else if (key === "call_count") td.textContent = String(p.call_count);
-      else if (key === "billed_minutes") td.textContent = p.billed_minutes != null ? Number(p.billed_minutes).toFixed(1) + "m" : "—";
+      else if (key === "billed_minutes") td.textContent = p.billed_minutes != null ? Number(p.billed_minutes).toFixed(1) + "min" : "—";
       else if (["input_tokens", "cached_input_tokens", "output_tokens", "total_tokens"].includes(key)) {
         td.textContent = Number(p[key] || 0).toLocaleString();
       }
