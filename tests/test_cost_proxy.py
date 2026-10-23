@@ -105,3 +105,11 @@ def test_pin_check_accepts_correct_pin(client, keyed, monkeypatch):
     resp = client.get("/cost/pin-check", params={"pin": "4080"}, headers=keyed)
     assert resp.status_code == 200
     assert resp.json() == {"pin_required": True, "correct": True}
+
+
+def test_price_book_is_read_only_and_requires_existing_dashboard_key(client, keyed, monkeypatch):
+    _mock_upstream(monkeypatch, content=b'{"rates":[]}')
+    assert client.get('/cost/api/internal/price-book').status_code == 401
+    assert client.get('/cost/api/internal/price-book', headers=keyed).json() == {'rates': []}
+    assert client.post('/cost/api/internal/price-book', headers=keyed, json={}).status_code == 405
+    assert client.post('/cost/api-write/price-book', headers=keyed, json={}).status_code == 404

@@ -485,7 +485,7 @@ const costState = {
 
 function isoDate(d) { return d.toISOString().slice(0, 10); }
 
-function computeRangeDates(range) {
+function computeRangeDates(range, customState = costState) {
   const today = new Date();
   const end = isoDate(today);
   if (range === "today") return { start: end, end };
@@ -505,7 +505,7 @@ function computeRangeDates(range) {
     const d = new Date(Date.UTC(today.getUTCFullYear(), 0, 1));
     return { start: isoDate(d), end };
   }
-  return { start: costState.startDate, end: costState.endDate };
+  return { start: customState.startDate, end: customState.endDate };
 }
 
 function applyRangePreset(range) {
@@ -538,8 +538,25 @@ $("cost-custom-apply").onclick = () => {
 
 $("cost-provider-filter").onchange = (e) => {
   costState.provider = e.target.value;
+  syncCostAgentTabs();
   refreshCostData();
 };
+
+function syncCostAgentTabs() {
+  document.querySelectorAll("#cost-agent-tabs .cost-agent-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.provider === costState.provider);
+  });
+}
+
+document.querySelectorAll("#cost-agent-tabs .cost-agent-tab").forEach((btn) => {
+  btn.onclick = () => {
+    costState.provider = btn.dataset.provider;
+    $("cost-provider-filter").value = costState.provider;
+    syncCostAgentTabs();
+    refreshCostData();
+  };
+});
+
 
 document.querySelectorAll("#cost-group-toggle .filter-btn").forEach((btn) => {
   btn.onclick = () => {
@@ -566,13 +583,38 @@ async function loadCostToday() {
   const box = $("cost-today");
   box.innerHTML = '<div class="empty">Loading…</div>';
   try {
+    if (costState.provider === "llm") {
+      const today = isoDate(new Date());
+      const d = await api(`/cost/api/internal/costs/breakdown?start_date=${today}&end_date=${today}`);
+      const s = costReportingSummary(d);
+      box.innerHTML = "";
+      const cards = [
+        ["Tokens today", (s.total_tokens || 0).toLocaleString()],
+        ["Input tokens", (s.input_tokens || 0).toLocaleString()],
+        ["Output tokens", (s.output_tokens || 0).toLocaleString()],
+        ["LLM spend today", fmtUsd(s.llm_cost_usd || "0")],
+      ];
+      cards.forEach(([label, value]) => {
+        const card = document.createElement("div");
+        card.className = "cost-card";
+        const labelEl = document.createElement("div");
+        labelEl.className = "cost-card-label";
+        labelEl.textContent = label;
+        const valueEl = document.createElement("div");
+        valueEl.className = "cost-card-value";
+        valueEl.textContent = value;
+        card.append(labelEl, valueEl);
+        box.appendChild(card);
+      });
+      return;
+    }
     const d = await api("/cost/api/internal/costs/daily");
     box.innerHTML = "";
     const cards = [
       ["Phone", fmtUsd(d.phone_cost_usd)],
       ["WhatsApp", "not yet tracked"],
-      ["Fixed (server)", fmtUsd(d.fixed_cost_usd)],
-      ["Total today", fmtUsd(d.total_cost_usd)],
+
+      ["Variable spend today", fmtUsd(d.variable_cost_usd)],
     ];
     cards.forEach(([label, value]) => {
       const card = document.createElement("div");
@@ -603,9 +645,11 @@ const CALLS_COLUMNS = [
   { key: "started_at", label: "Started" },
   { key: "status", label: "Status" },
   { key: "providers", label: "Providers" },
+  { key: "total_duration_s", label: "Duration (s)" },
+  { key: "billed_minutes", label: "Billed Voice Mins" },
   { key: "total_input_tokens", label: "Input tokens" },
   { key: "total_output_tokens", label: "Output tokens" },
-  { key: "total_cost_usd", label: "Cost" },
+  { key: "total_cost_usd", label: "Call variable spend" },
 ];
 
 function sortCalls(calls) {
@@ -614,7 +658,7 @@ function sortCalls(calls) {
   return [...calls].sort((a, b) => {
     let av = a[sortKey], bv = b[sortKey];
     if (sortKey === "providers") { av = (av || []).join(", "); bv = (bv || []).join(", "); }
-    if (sortKey === "total_cost_usd") { av = Number(av); bv = Number(bv); }
+    if (["total_cost_usd", "total_duration_s", "billed_minutes", "total_input_tokens", "total_output_tokens"].includes(sortKey)) { av = Number(av); bv = Number(bv); }
     if (av == null) av = "";
     if (bv == null) bv = "";
     if (av < bv) return -1 * dir;
@@ -673,6 +717,8 @@ function renderCostCallsTable() {
       fmtTime(c.started_at),
       c.status,
       (c.providers || []).join(", "),
+      c.total_duration_s != null ? String(c.total_duration_s) : "—",
+      c.billed_minutes != null ? Number(c.billed_minutes).toFixed(1) + "min" : "—",
       String(c.total_input_tokens ?? 0),
       String(c.total_output_tokens ?? 0),
       fmtUsd(c.total_cost_usd),
@@ -689,18 +735,44 @@ function renderCostCallsTable() {
   box.appendChild(table);
 }
 
+function costReportingSummary(data) {
+  const summary = data.summary;
+  const fields = ["variable_cost_usd", "total_billed_minutes", "cached_input_tokens", "llm_cost_usd", "fixed_elevenlabs_plan_usd"];
+  if (!summary || fields.some(key => summary[key] == null)) {
+    throw new Error("Cost reporting backend update required");
+  }
+  return summary;
+}
+
 function renderCostSummary(summary) {
   const box = $("cost-summary-panel");
   box.innerHTML = "";
-  const rows = [
-    ["Total cost", fmtUsd(summary.total_cost_usd)],
-    ["Calls", String(summary.call_count)],
-    ["Avg cost / call", fmtUsd(summary.avg_cost_per_call_usd)],
-    ["OpenAI", fmtUsd(summary.openai_cost_usd)],
-    ["ElevenLabs", fmtUsd(summary.elevenlabs_cost_usd)],
-    ["Plivo", fmtUsd(summary.plivo_cost_usd)],
-    ["Fixed (server)", fmtUsd(summary.fixed_cost_usd)],
-  ];
+  let rows;
+  if (costState.provider === "llm") {
+    const totalTokens = summary.total_tokens || 0;
+    const calls = summary.call_count || 0;
+    const avgTok = calls ? Math.round(totalTokens / calls) : 0;
+    rows = [
+      ["LLM Spend", fmtUsd(summary.llm_cost_usd)],
+      ["Calls", String(calls)],
+      ["Total tokens", totalTokens.toLocaleString()],
+      ["Input tokens", (summary.input_tokens || 0).toLocaleString()],
+      ["Cached tokens", (summary.cached_input_tokens || 0).toLocaleString()],
+      ["Output tokens", (summary.output_tokens || 0).toLocaleString()],
+      ["Avg tokens / all calls", avgTok.toLocaleString()],
+    ];
+  } else {
+    rows = [
+      ["Variable spend", fmtUsd(summary.variable_cost_usd)],
+      ["Calls", String(summary.call_count)],
+      ["Total voice minutes", summary.total_billed_minutes != null ? Number(summary.total_billed_minutes).toFixed(1) + "min" : "—"],
+      ["Variable spend / call", fmtUsd(Number(summary.variable_cost_usd) / (summary.call_count || 1))],
+      ["OpenAI", fmtUsd(summary.openai_cost_usd)],
+      ["ElevenLabs", fmtUsd(summary.elevenlabs_cost_usd)],
+      ["Plivo", fmtUsd(summary.plivo_cost_usd)],
+    ];
+  }
+
   rows.forEach(([label, value]) => {
     const row = document.createElement("div");
     row.className = "cost-summary-row";
@@ -716,9 +788,23 @@ function renderCostSummary(summary) {
 }
 
 const BREAKDOWN_COLUMNS = [
-  ["period", "Date"], ["call_count", "Calls"], ["openai_cost_usd", "OpenAI"],
-  ["elevenlabs_cost_usd", "ElevenLabs"], ["plivo_cost_usd", "Plivo"],
-  ["fixed_cost_usd", "Fixed"], ["total_cost_usd", "Total"],
+  ["period", "Date"],
+  ["call_count", "Calls"],
+  ["billed_minutes", "Billed Mins"],
+  ["openai_cost_usd", "OpenAI"],
+  ["elevenlabs_cost_usd", "ElevenLabs"],
+  ["plivo_cost_usd", "Plivo"],
+  ["variable_cost_usd", "Variable spend"],
+];
+
+const LLM_BREAKDOWN_COLUMNS = [
+  ["period", "Date"],
+  ["call_count", "Calls"],
+  ["input_tokens", "Input Tokens"],
+  ["cached_input_tokens", "Cached Tokens"],
+  ["output_tokens", "Output Tokens"],
+  ["total_tokens", "Total Tokens"],
+  ["llm_cost_usd", "LLM Spend"],
 ];
 
 async function loadCostBreakdownAndSummary() {
@@ -732,6 +818,7 @@ async function loadCostBreakdownAndSummary() {
       group_by: costState.groupBy, start_date: costState.startDate, end_date: costState.endDate,
     });
     data = await api(`/cost/api/internal/costs/breakdown?${params}`);
+    costReportingSummary(data);
   } catch (err) {
     renderEmpty(summaryBox, `Summary unavailable (${err.message}).`);
     renderEmpty(box, `Breakdown unavailable (${err.message}).`);
@@ -744,7 +831,9 @@ async function loadCostBreakdownAndSummary() {
   const table = document.createElement("table");
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  BREAKDOWN_COLUMNS.forEach(([, label]) => {
+  const isLlm = costState.provider === "llm";
+  const cols = isLlm ? LLM_BREAKDOWN_COLUMNS : BREAKDOWN_COLUMNS;
+  cols.forEach(([, label]) => {
     const th = document.createElement("th");
     th.textContent = label;
     headRow.appendChild(th);
@@ -755,10 +844,14 @@ async function loadCostBreakdownAndSummary() {
   periods.slice().reverse().forEach((p) => {
     const tr = document.createElement("tr");
     tr.className = "cost-row";
-    BREAKDOWN_COLUMNS.forEach(([key]) => {
+    cols.forEach(([key]) => {
       const td = document.createElement("td");
       if (key === "period") td.textContent = p.period;
       else if (key === "call_count") td.textContent = String(p.call_count);
+      else if (key === "billed_minutes") td.textContent = p.billed_minutes != null ? Number(p.billed_minutes).toFixed(1) + "min" : "—";
+      else if (["input_tokens", "cached_input_tokens", "output_tokens", "total_tokens"].includes(key)) {
+        td.textContent = Number(p[key] || 0).toLocaleString();
+      }
       else td.textContent = fmtUsd(p[key]);
       tr.appendChild(td);
     });
@@ -793,3 +886,170 @@ async function openCostDrilldown(callId) {
   }
 }
 $("cost-drilldown-close").onclick = () => $("cost-drilldown").classList.add("hidden");
+
+// ── fixed costs & rates reporting ─────────────
+let ratesLoaded = false;
+
+const fixedCostState = {
+  range: "today",
+  startDate: null,
+  endDate: null,
+};
+
+function applyFixedCostRange(range) {
+  fixedCostState.range = range;
+  document.querySelectorAll("#fixed-cost-date-presets .filter-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.range === range);
+  });
+  const customBox = $("fixed-cost-custom-range");
+  if (customBox) customBox.classList.toggle("hidden", range !== "custom");
+  if (range === "custom") {
+    if (!fixedCostState.startDate || !fixedCostState.endDate) return;
+  }
+  const { start, end } = computeRangeDates(range, fixedCostState);
+  fixedCostState.startDate = start;
+  fixedCostState.endDate = end;
+  loadFixedCostsSection();
+}
+
+document.querySelectorAll("#fixed-cost-date-presets .filter-btn").forEach((btn) => {
+  btn.onclick = () => applyFixedCostRange(btn.dataset.range);
+});
+
+if ($("fixed-cost-custom-apply")) {
+  $("fixed-cost-custom-apply").onclick = () => {
+    const start = $("fixed-cost-range-start").value;
+    const end = $("fixed-cost-range-end").value;
+    if (!start || !end) return;
+    fixedCostState.startDate = start;
+    fixedCostState.endDate = end;
+    loadFixedCostsSection();
+  };
+}
+
+async function loadFixedCostsSection() {
+  const box = $("fixed-cost-summary-cards");
+  if (!box) return;
+  box.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const { start, end } = computeRangeDates(fixedCostState.range, fixedCostState);
+    fixedCostState.startDate = start;
+    fixedCostState.endDate = end;
+    const params = new URLSearchParams({
+      start_date: fixedCostState.startDate,
+      end_date: fixedCostState.endDate,
+    });
+    const d = await api(`/cost/api/internal/costs/breakdown?${params}`);
+    const summary = costReportingSummary(d);
+    const elPlan = Number(summary.fixed_elevenlabs_plan_usd || 0);
+    const server = Number(summary.fixed_cost_usd || 0);
+    const totalFixed = elPlan + server;
+
+    box.innerHTML = "";
+    const cards = [
+      {
+        label: "ElevenLabs subscription",
+        value: fmtUsd(elPlan),
+        sub: "Configured subscription; $0 until a monthly amount is configured",
+      },
+      {
+        label: "Fixed (Server VPS)",
+        value: fmtUsd(server),
+        sub: "Configured server baseline",
+      },
+      {
+        label: "Total Fixed Overhead",
+        value: fmtUsd(totalFixed),
+        sub: `Amortized for ${fixedCostState.range}`,
+      },
+    ];
+
+    cards.forEach((c) => {
+      const card = document.createElement("div");
+      card.className = "cost-card";
+      const labelEl = document.createElement("div");
+      labelEl.className = "cost-card-label";
+      labelEl.textContent = c.label;
+      const valueEl = document.createElement("div");
+      valueEl.className = "cost-card-value";
+      valueEl.textContent = c.value;
+      const subEl = document.createElement("div");
+      subEl.className = "cost-card-sub";
+      subEl.textContent = c.sub;
+      card.append(labelEl, valueEl, subEl);
+      box.appendChild(card);
+    });
+  } catch (err) {
+    renderEmpty(box, `Fixed cost data unavailable (${err.message}).`);
+  }
+}
+
+function showCostSubtab(sub) {
+  $("cost-overview").classList.toggle("hidden", sub !== "overview");
+  $("cost-rates").classList.toggle("hidden", sub !== "rates");
+  $("cost-subtab-overview").classList.toggle("active", sub === "overview");
+  $("cost-subtab-rates").classList.toggle("active", sub === "rates");
+  if (sub === "rates") {
+    loadFixedCostsSection();
+    if (!ratesLoaded) loadRatesTable();
+  }
+}
+$("cost-subtab-overview").onclick = () => showCostSubtab("overview");
+$("cost-subtab-rates").onclick = () => showCostSubtab("rates");
+
+$("rates-show-history").onchange = () => loadRatesTable();
+
+const RATES_COLUMNS = [
+  "Provider", "Model", "Unit", "Rate(s)", "Status", "Effective from", "Effective to",
+];
+
+function formatRateValues(r) {
+  if (r.billing_unit === "million_tokens") {
+    const parts = [`in ${r.input_rate ?? "—"}`, `out ${r.output_rate ?? "—"}`];
+    if (r.cached_input_rate) parts.push(`cached ${r.cached_input_rate}`);
+    return parts.join(" / ");
+  }
+  return r.flat_rate ?? "—";
+}
+
+async function loadRatesTable() {
+  ratesLoaded = true;
+  const box = $("rates-table");
+  box.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const includeHistory = $("rates-show-history").checked;
+    const data = await api(`/cost/api/internal/price-book?include_history=${includeHistory}`);
+    const rates = data.rates || [];
+    if (!rates.length) { renderEmpty(box, "No rates yet."); return; }
+    box.innerHTML = "";
+    const table = document.createElement("table");
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    RATES_COLUMNS.forEach((label) => {
+      const th = document.createElement("th");
+      th.textContent = label;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    const tbody = document.createElement("tbody");
+    rates.forEach((r) => {
+      const tr = document.createElement("tr");
+      const cells = [
+        r.provider, r.model, r.billing_unit, formatRateValues(r), r.approval_status,
+        fmtTime(r.effective_from), r.effective_to ? fmtTime(r.effective_to) : "—",
+      ];
+      cells.forEach((text) => {
+        const td = document.createElement("td");
+        td.textContent = String(text);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    box.appendChild(table);
+  } catch (err) {
+    ratesLoaded = false;
+    renderEmpty(box, `Rates unavailable (${err.message}).`);
+  }
+}

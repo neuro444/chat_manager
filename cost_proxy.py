@@ -30,6 +30,7 @@ _ALLOWED = {
     "internal/reviews",
     "internal/price-checks",
     "internal/price-flags",
+    "internal/price-book",
 }
 
 
